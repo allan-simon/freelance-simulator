@@ -351,15 +351,17 @@ export default function App() {
     mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 540,
     divers: 1500
   });
-  const fraisAvecPer = { ...frais, per };
-
   const caHT = tjm * jours;
-  const totalFrais = Object.values(fraisAvecPer).reduce((a, b) => a + b, 0);
-  const maxSalaireBrut = Math.floor((caHT - totalFrais) / 1.42 / 5000) * 5000;
+  const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
+  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / 1.42 / 5000) * 5000;
   const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
+  const superbrut_ = salaireBrutEffectif * 1.42;
+  const maxPer = Math.max(0, Math.floor((caHT - superbrut_ - totalFraisHorsPer) / 500) * 500);
+  const perEffectif = Math.min(per, maxPer);
+  const fraisAvecPer = { ...frais, per: perEffectif };
+  const totalFrais = totalFraisHorsPer + perEffectif;
 
   // Max dividendes nets distribuables
-  const superbrut_ = salaireBrutEffectif * 1.42;
   const resultat_ = Math.max(0, caHT - superbrut_ - totalFrais);
   const is_ = Math.min(resultat_, 100000) * 0.15 + Math.max(0, resultat_ - 100000) * 0.25;
   const maxDivNets = Math.floor((resultat_ - is_) * (1 - 0.314) / 1000) * 1000;
@@ -374,7 +376,7 @@ export default function App() {
     croquerCapital, ageFin, joursLeverLePied
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, per, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -431,11 +433,11 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: '#fff5f5', borderRadius: 8, border: '1px solid #fc8181' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#9b2c2c' }}>Total charges fixes</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#9b2c2c', fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(totalFrais)}</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#9b2c2c', fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(totalFraisHorsPer)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', marginTop: 8, background: '#ebf5ff', borderRadius: 8, border: '1px solid #90cdf4' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb' }}>Disponible après charges fixes</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT - totalFrais)}</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT - totalFraisHorsPer)}</span>
           </div>
         </Card>
 
@@ -459,7 +461,7 @@ export default function App() {
             {/* Colonne PER */}
             <div style={{ padding: 12, background: '#faf5ff', borderRadius: 8, border: '1px solid #d6bcfa' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#553c9a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PER — Plan d'Épargne Retraite</div>
-              <Slider label="Versement annuel PER" value={per} onChange={setPer} min={0} max={15000} step={500} />
+              <Slider label="Versement annuel PER" value={perEffectif} onChange={setPer} min={0} max={maxPer} step={500} />
               <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 0, fontStyle: 'italic' }}>
                 Versé par la SASU, déduit du résultat (réduit l'IS) — bloqué jusqu'à 64 ans
               </div>
