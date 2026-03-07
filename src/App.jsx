@@ -460,7 +460,11 @@ export default function App() {
           {/* Répartition du bénéfice */}
           <div style={{ marginTop: 16, padding: 12, background: '#f0fff4', borderRadius: 8, border: '1px solid #9ae6b4' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</div>
-            <Slider label="Dividendes nets annuels" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
+            <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 8, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+              <span>Bénéfice distribuable : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</b></span>
+              <span>→ après flat tax (31,4%) : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b> nets max</span>
+            </div>
+            <Slider label="Dividendes nets annuels (après flat tax)" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
             <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 8, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
               {fmt(Math.round(divNetsEffectif / 12))}/mois sur votre compte — flat tax {fmt(r.flatTax)} déduite
             </div>
