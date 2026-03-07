@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // ============================================================
@@ -11,7 +11,8 @@ function computeAll(params) {
     tauxPatronales, tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
-    croquerCapital = false, ageFin = 80, joursLeverLePied = 50
+    croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
+    ratioTreso = 0.15, ratioCapi = 0.65
   } = params;
 
   // --- CA ---
@@ -77,9 +78,10 @@ function computeAll(params) {
 
   // --- Capitalisation ---
   const resteSASU = benefDistribuable - divBrutsSortis;
-  const contratCapi = resteSASU * 0.65;
-  const scpi = resteSASU * 0.20;
-  const reserveTreso = resteSASU * 0.15;
+  const ratioScpi = Math.max(0, 1 - ratioTreso - ratioCapi);
+  const reserveTreso = resteSASU * ratioTreso;
+  const contratCapi = resteSASU * ratioCapi;
+  const scpi = resteSASU * ratioScpi;
   const peaPerso = 2400;
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
@@ -292,6 +294,100 @@ function Slider({ label, value, onChange, min, max, step, format = "money", suff
   );
 }
 
+function TriSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d', color2 = '#2563eb', color3 = '#38a169', amounts }) {
+  const barRef = useRef(null);
+  const dragging = useRef(null);
+
+  const pct1 = Math.round(v1 * 100);
+  const pct2 = Math.round(v2 * 100);
+  const pct3 = Math.round((1 - v1 - v2) * 100);
+
+  const getVal = useCallback((e) => {
+    const rect = barRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }, []);
+
+  const onMove = useCallback((e) => {
+    if (!dragging.current) return;
+    e.preventDefault();
+    const x = getVal(e);
+    const step = 0.05;
+    const snap = v => Math.round(v / step) * step;
+    if (dragging.current === 'h1') {
+      const newV1 = snap(Math.min(x, 1 - v2));
+      onChange(Math.max(0, newV1), v2);
+    } else {
+      const newV2 = snap(Math.min(x - v1, 1 - v1));
+      onChange(v1, Math.max(0, newV2));
+    }
+  }, [v1, v2, onChange, getVal]);
+
+  const onUp = useCallback(() => { dragging.current = null; }, []);
+
+  const onDown = useCallback((handle) => (e) => {
+    e.preventDefault();
+    dragging.current = handle;
+    const move = (ev) => {
+      if (!dragging.current) return;
+      ev.preventDefault();
+      const rect = barRef.current.getBoundingClientRect();
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const step = 0.05;
+      const snap = v => Math.round(v / step) * step;
+      if (handle === 'h1') {
+        const newV1 = snap(Math.min(x, 1 - v2));
+        onChange(Math.max(0, newV1), v2);
+      } else {
+        const newV2 = snap(Math.min(x - v1, 1 - v1));
+        onChange(v1, Math.max(0, newV2));
+      }
+    };
+    const up = () => {
+      dragging.current = null;
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('touchend', up);
+  }, [v1, v2, onChange]);
+
+  const handleStyle = (left) => ({
+    position: 'absolute', left: `${left * 100}%`, top: '50%', transform: 'translate(-50%, -50%)',
+    width: 18, height: 18, borderRadius: '50%', background: '#fff', border: '2px solid #4a5568',
+    cursor: 'ew-resize', zIndex: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+    touchAction: 'none',
+  });
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div ref={barRef} style={{ position: 'relative', height: 24, borderRadius: 6, overflow: 'visible', display: 'flex', cursor: 'pointer', userSelect: 'none' }}>
+        <div style={{ width: `${pct1}%`, background: color1, borderRadius: '6px 0 0 6px', minWidth: pct1 > 0 ? 2 : 0 }} />
+        <div style={{ width: `${pct2}%`, background: color2, minWidth: pct2 > 0 ? 2 : 0 }} />
+        <div style={{ width: `${pct3}%`, background: color3, borderRadius: '0 6px 6px 0', minWidth: pct3 > 0 ? 2 : 0 }} />
+        <div onMouseDown={onDown('h1')} onTouchStart={onDown('h1')} style={handleStyle(v1)} />
+        <div onMouseDown={onDown('h2')} onTouchStart={onDown('h2')} style={handleStyle(v1 + v2)} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
+        {[{ label: label1, pct: pct1, color: color1, amount: amounts[0] },
+          { label: label2, pct: pct2, color: color2, amount: amounts[1] },
+          { label: label3, pct: pct3, color: color3, amount: amounts[2] }].map((s, i) => (
+          <div key={i} style={{ flex: 1, textAlign: 'center', padding: '4px 2px', background: '#f7fafc', borderRadius: 4, borderTop: `3px solid ${s.color}` }}>
+            <div style={{ fontSize: 10, color: '#718096', fontWeight: 600 }}>{s.label}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>{s.amount}</div>
+            <div style={{ fontSize: 10, color: '#a0aec0' }}>{s.pct}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Card({ title, subtitle, children, accent = "#2563eb" }) {
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', marginBottom: 16,
@@ -345,6 +441,8 @@ export default function App() {
   const [croquerCapital, setCroquerCapital] = useState(false);
   const [ageFin, setAgeFin] = useState(80);
   const [per, setPer] = useState(5000);
+  const [ratioTreso, setRatioTreso] = useState(0.15);
+  const [ratioCapi, setRatioCapi] = useState(0.65);
 
   const [frais] = useState({
     comptable: 3000, rcPro: 800, cfe: 500, banque: 300, bureau: 2000,
@@ -373,10 +471,11 @@ export default function App() {
     tauxISReduit: 0.15, tauxISNormal: 0.25, tauxFlatTax: 0.314,
     abattementIR: 0.10, revenuConjoint: 16800, partsFiscales: 2.5,
     frais: fraisAvecPer, rendement, ageActuel: 36, ageObjectif,
-    croquerCapital, ageFin, joursLeverLePied
+    croquerCapital, ageFin, joursLeverLePied,
+    ratioTreso, ratioCapi
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -488,29 +587,38 @@ export default function App() {
           {/* Répartition du bénéfice */}
           <div style={{ marginTop: 16, padding: 12, background: '#f0fff4', borderRadius: 8, border: '1px solid #9ae6b4' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</div>
-            <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 8, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+            <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 12, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
               <span>Bénéfice distribuable : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</b></span>
               <span>→ après flat tax (31,4%) : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b> nets max</span>
             </div>
-            <Slider label="Dividendes nets annuels (après flat tax)" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
-            <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 8, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
-              {fmt(Math.round(divNetsEffectif / 12))}/mois sur votre compte — flat tax {fmt(r.flatTax)} déduite
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
-                <div style={{ fontSize: 10, color: '#718096' }}>Réserve tréso SASU</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a365d', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.reserveTreso)}</div>
-                <div style={{ fontSize: 9, color: '#a0aec0' }}>matelas sécurité</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              {/* Colonne gauche : Dividendes */}
+              <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dividendes — dans votre poche</div>
+                <Slider label="Dividendes nets annuels (après flat tax)" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
+                <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {fmt(Math.round(divNetsEffectif / 12))}/mois sur votre compte
+                </div>
+                <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Flat tax prélevée</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.flatTax)}</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                  <span>Dividendes bruts sortis</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.divBrutsSortis)}</span>
+                </div>
               </div>
-              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
-                <div style={{ fontSize: 10, color: '#718096' }}>Contrat capitalisation</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.contratCapi)}</div>
-                <div style={{ fontSize: 9, color: '#a0aec0' }}>65% du non-distribué</div>
-              </div>
-              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
-                <div style={{ fontSize: 10, color: '#718096' }}>SCPI (usufruit)</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.scpi)}</div>
-                <div style={{ fontSize: 9, color: '#a0aec0' }}>20% du non-distribué</div>
+              {/* Colonne droite : Reste en SASU */}
+              <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en SASU — {fmt(r.resteSASU)}</div>
+                <div style={{ fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées pour répartir entre trésorerie, capitalisation et SCPI</div>
+                <TriSlider
+                  v1={ratioTreso} v2={ratioCapi}
+                  onChange={(t, c) => { setRatioTreso(t); setRatioCapi(c); }}
+                  label1="Réserve tréso" label2="Contrat capi" label3="SCPI (usufruit)"
+                  color1="#1a365d" color2="#2563eb" color3="#38a169"
+                  amounts={[fmt(r.reserveTreso), fmt(r.contratCapi), fmt(r.scpi)]}
+                />
               </div>
             </div>
           </div>
