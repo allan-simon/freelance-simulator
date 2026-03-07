@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 function computeAll(params) {
   const {
-    tjm, jours, salaireBrut, ratioDistrib,
+    tjm, jours, salaireBrut, divNetsVoulus,
     tauxPatronales, tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
@@ -39,9 +39,12 @@ function computeAll(params) {
   const benefDistribuable = resultatAvantIS - isTotal;
 
   // --- Dividendes ---
-  const divBrutsSortis = benefDistribuable * ratioDistrib;
+  const divBrutsMax = benefDistribuable;
+  const divNetsMax = divBrutsMax * (1 - tauxFlatTax);
+  const divNets = Math.min(divNetsVoulus, divNetsMax);
+  const divBrutsSortis = divNets / (1 - tauxFlatTax);
   const flatTax = divBrutsSortis * tauxFlatTax;
-  const divNets = divBrutsSortis - flatTax;
+  const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
 
   // --- IR (barème 2025) ---
   const revenuImposableVous = salaireNet * (1 - abattementIR);
@@ -253,7 +256,7 @@ function computeAll(params) {
     caHT, totalFrais, chargesPatronales, superbrut, salaireNet,
     totalCharges, resultatAvantIS, baseISReduit, baseISNormal,
     isReduit, isNormal, isTotal, tauxEffectifIS, benefDistribuable,
-    divBrutsSortis, flatTax, divNets,
+    divBrutsSortis, flatTax, divNets, divNetsMax, ratioDistrib,
     revenuImposableVous, revenuImposableConjoint, revenuImposableFoyer,
     quotientFamilial, irFoyer, votreIR, tmi,
     netNetAnnuel, netNetMensuel,
@@ -335,7 +338,7 @@ export default function App() {
   const [tjm, setTjm] = useState(1200);
   const [jours, setJours] = useState(220);
   const [salaireBrut, setSalaireBrut] = useState(60000);
-  const [ratioDistrib, setRatioDistrib] = useState(0.55);
+  const [divNetsVoulus, setDivNetsVoulus] = useState(40000);
   const [rendement, setRendement] = useState(0.06);
   const [ageObjectif, setAgeObjectif] = useState(50);
   const [joursLeverLePied, setJoursLeverLePied] = useState(50);
@@ -348,8 +351,20 @@ export default function App() {
     divers: 1500, per: 5000
   });
 
+  const caHT = tjm * jours;
+  const totalFrais = Object.values(frais).reduce((a, b) => a + b, 0);
+  const maxSalaireBrut = Math.floor((caHT - totalFrais) / 1.42 / 5000) * 5000;
+  const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
+
+  // Max dividendes nets distribuables
+  const superbrut_ = salaireBrutEffectif * 1.42;
+  const resultat_ = Math.max(0, caHT - superbrut_ - totalFrais);
+  const is_ = Math.min(resultat_, 100000) * 0.15 + Math.max(0, resultat_ - 100000) * 0.25;
+  const maxDivNets = Math.floor((resultat_ - is_) * (1 - 0.314) / 1000) * 1000;
+  const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, maxDivNets));
+
   const params = {
-    tjm, jours, salaireBrut, ratioDistrib,
+    tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     tauxPatronales: 0.42, tauxSalariales: 0.28, seuilIS: 100000,
     tauxISReduit: 0.15, tauxISNormal: 0.25, tauxFlatTax: 0.314,
     abattementIR: 0.10, revenuConjoint: 16800, partsFiscales: 2.5,
@@ -357,7 +372,7 @@ export default function App() {
     croquerCapital, ageFin, joursLeverLePied
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrut, ratioDistrib, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -375,20 +390,111 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 40px' }}>
-        {/* SLIDERS */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-          <Card title="Paramètres d'activité" subtitle="Votre facturation et votre rémunération de président" accent="#2563eb">
+        {/* ÉTAPE 1 : CHIFFRE D'AFFAIRES */}
+        <Card title="1. Chiffre d'affaires" subtitle="Votre facturation = le point de départ" accent="#2563eb">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'end' }}>
             <Slider label="TJM HT" value={tjm} onChange={setTjm} min={400} max={2500} step={50} />
             <Slider label="Jours facturés/an" value={jours} onChange={setJours} min={150} max={230} step={5} format="num" suffix=" j" />
-            <Slider label="Salaire brut annuel" value={salaireBrut} onChange={setSalaireBrut} min={30000} max={120000} step={5000} />
-          </Card>
-          <Card title="Distribution & projection" subtitle="Combien vous sortez pour vivre vs ce que vous capitalisez" accent="#38a169">
-            <Slider label="Ratio dividendes sortis" value={ratioDistrib} onChange={setRatioDistrib} min={0.1} max={1} step={0.05} format="pct" />
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ fontSize: 12, color: '#718096', marginBottom: 4 }}>CA HT annuel</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT)}</div>
+            </div>
+          </div>
+        </Card>
+
+        {/* ÉTAPE 2 : CHARGES FIXES */}
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <Card title="2. Charges fixes d'exploitation" subtitle="Ce que la société paie quoi qu'il arrive — non lié à votre rémunération" accent="#e53e3e">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {Object.entries(frais).map(([k, v]) => (
+              <div key={k} style={{ fontSize: 11, padding: '4px 10px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0', fontFamily: "'JetBrains Mono', monospace" }}>
+                {k === 'rcPro' ? 'RC Pro' : k === 'chequesVacances' ? 'chèques-vacances' : k} : {fmt(v)}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: '#fff5f5', borderRadius: 8, border: '1px solid #fc8181' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#9b2c2c' }}>Total charges fixes</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#9b2c2c', fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(totalFrais)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', marginTop: 8, background: '#ebf5ff', borderRadius: 8, border: '1px solid #90cdf4' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb' }}>Disponible après charges fixes</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT - totalFrais)}</span>
+          </div>
+        </Card>
+
+        {/* ÉTAPE 3 : RÉPARTITION */}
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <Card title="3. Répartition de la rémunération" subtitle="Comment vous répartissez entre salaire, dividendes et ce qui reste dans la société" accent="#38a169">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            {/* Colonne salaire */}
+            <div style={{ padding: 12, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Salaire président</div>
+              <Slider label="Salaire brut annuel" value={salaireBrutEffectif} onChange={setSalaireBrut} min={30000} max={maxSalaireBrut} step={5000} />
+              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                <span>Superbrut (brut + 42% patronales)</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.superbrut)}</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                <span>Net perso ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
+              </div>
+            </div>
+            {/* Colonne IS + bénéfice */}
+            <div style={{ padding: 12, background: '#fffff0', borderRadius: 8, border: '1px solid #fefcbf' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#975a16', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résultat & IS</div>
+              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>Résultat avant IS</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(r.resultatAvantIS)}</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>IS (taux effectif {fmtPct(r.tauxEffectifIS)})</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.isTotal)}</span>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#975a16', display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #fefcbf' }}>
+                <span>Bénéfice distribuable</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Répartition du bénéfice */}
+          <div style={{ marginTop: 16, padding: 12, background: '#f0fff4', borderRadius: 8, border: '1px solid #9ae6b4' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</div>
+            <Slider label="Dividendes nets annuels" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
+            <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 8, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
+              {fmt(Math.round(divNetsEffectif / 12))}/mois sur votre compte — flat tax {fmt(r.flatTax)} déduite
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
+                <div style={{ fontSize: 10, color: '#718096' }}>Réserve tréso SASU</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a365d', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.reserveTreso)}</div>
+                <div style={{ fontSize: 9, color: '#a0aec0' }}>matelas sécurité</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
+                <div style={{ fontSize: 10, color: '#718096' }}>Contrat capitalisation</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.contratCapi)}</div>
+                <div style={{ fontSize: 9, color: '#a0aec0' }}>65% du non-distribué</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 8, background: '#fff', borderRadius: 6 }}>
+                <div style={{ fontSize: 10, color: '#718096' }}>SCPI (usufruit)</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.scpi)}</div>
+                <div style={{ fontSize: 9, color: '#a0aec0' }}>20% du non-distribué</div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* ÉTAPE 4 : PROJECTION */}
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             <Slider label="Rendement placements" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
-            <Slider label="Lever le pied = bosser combien de jours/an" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
-            <div style={{ marginTop: 8, marginBottom: 8, padding: '12px', background: croquerCapital ? '#fff5f5' : '#f0fff4',
-              borderRadius: 8, border: `1px solid ${croquerCapital ? '#fc8181' : '#9ae6b4'}`, cursor: 'pointer' }}
+            <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ padding: '10px 16px', background: croquerCapital ? '#fff5f5' : '#f0fff4',
+              borderRadius: 8, border: `1px solid ${croquerCapital ? '#fc8181' : '#9ae6b4'}`, cursor: 'pointer', flex: '1 1 auto' }}
               onClick={() => setCroquerCapital(!croquerCapital)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 44, height: 24, borderRadius: 12, background: croquerCapital ? '#e53e3e' : '#c6f6d5',
@@ -407,10 +513,12 @@ export default function App() {
               </div>
             </div>
             {croquerCapital && (
-              <Slider label="Âge fin de capital" value={ageFin} onChange={setAgeFin} min={70} max={95} step={1} format="num" suffix=" ans" />
+              <div style={{ minWidth: 200 }}>
+                <Slider label="Âge fin de capital" value={ageFin} onChange={setAgeFin} min={70} max={95} step={1} format="num" suffix=" ans" />
+              </div>
             )}
-          </Card>
-        </div>
+          </div>
+        </Card>
 
         {/* HEADLINE STATS */}
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, marginBottom: 24,
@@ -428,7 +536,7 @@ export default function App() {
           {/* COMPTE DE RÉSULTAT */}
           <Card title="Compte de résultat SASU" subtitle="Ce que la société gagne, paie, et ce qu'il reste à distribuer" accent="#2563eb">
             <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
-            <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrut)} + cotisations patronales ${fmtPct(0.42)} [1]`} />
+            <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(0.42)} [1]`} />
             <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
             <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
             <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 100 000 € puis 25% [2]`} />
@@ -437,8 +545,8 @@ export default function App() {
 
           {/* NET NET */}
           <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
-            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrut)} moins cotisations salariales (28%) [3]`} />
-            <Row label={`Dividendes bruts sortis (${fmtPct(ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
+            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrutEffectif)} moins cotisations salariales (28%) [3]`} />
+            <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
             <Row label="Prélèvement forfaitaire unique (flat tax 31,4%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]" />
             <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
             <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts [5]`} />
@@ -449,7 +557,7 @@ export default function App() {
 
           {/* CAPITALISATION */}
           <Card title="Capitalisation automatique" subtitle="L'argent qui reste dans la SASU et travaille pour vous, sans y toucher" accent="#9b2c2c">
-            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - ratioDistrib)} du distribuable reste dans la SASU`} />
+            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - r.ratioDistrib)} du distribuable reste dans la SASU`} />
             <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
             <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
             <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />

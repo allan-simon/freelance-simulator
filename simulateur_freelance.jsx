@@ -71,7 +71,7 @@ const REGL = {
 
 function computeAll(params) {
   const {
-    tjm, jours, salaireBrut, ratioDistrib,
+    tjm, jours, salaireBrut, divNetsVoulus,
     tauxPatronales, tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
@@ -103,9 +103,12 @@ function computeAll(params) {
   const benefDistribuable = resultatAvantIS - isTotal;
 
   // --- Dividendes ---
-  const divBrutsSortis = benefDistribuable * ratioDistrib;
+  const divBrutsMax = benefDistribuable;
+  const divNetsMax = divBrutsMax * (1 - tauxFlatTax);
+  const divNets = Math.min(divNetsVoulus, divNetsMax);
+  const divBrutsSortis = divNets / (1 - tauxFlatTax);
   const flatTax = divBrutsSortis * tauxFlatTax;
-  const divNets = divBrutsSortis - flatTax;
+  const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
 
   // --- IR (barème 2026) ---
   const revenuImposableVous = salaireNet * (1 - abattementIR);
@@ -314,7 +317,7 @@ function computeAll(params) {
     caHT, totalFrais, chargesPatronales, superbrut, salaireNet,
     totalCharges, resultatAvantIS, baseISReduit, baseISNormal,
     isReduit, isNormal, isTotal, tauxEffectifIS, benefDistribuable,
-    divBrutsSortis, flatTax, divNets,
+    divBrutsSortis, flatTax, divNets, divNetsMax, ratioDistrib,
     revenuImposableVous, revenuImposableConjoint, revenuImposableFoyer,
     quotientFamilial, irFoyer, votreIR, tmi,
     netNetAnnuel, netNetMensuel,
@@ -396,7 +399,7 @@ export default function App() {
   const [tjm, setTjm] = useState(1200);
   const [jours, setJours] = useState(220);
   const [salaireBrut, setSalaireBrut] = useState(60000);
-  const [ratioDistrib, setRatioDistrib] = useState(0.55);
+  const [divNetsVoulus, setDivNetsVoulus] = useState(40000);
   const [rendement, setRendement] = useState(0.06);
   const [ageObjectif, setAgeObjectif] = useState(50);
   const [joursLeverLePied, setJoursLeverLePied] = useState(50);
@@ -409,8 +412,20 @@ export default function App() {
     divers: 1500, per: 5000
   });
 
+  const caHT = tjm * jours;
+  const totalFrais = Object.values(frais).reduce((a, b) => a + b, 0);
+  const maxSalaireBrut = Math.floor((caHT - totalFrais) / (1 + REGL.TAUX_PATRONALES) / 5000) * 5000;
+  const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
+
+  // Max dividendes nets distribuables
+  const superbrut_ = salaireBrutEffectif * (1 + REGL.TAUX_PATRONALES);
+  const resultat_ = Math.max(0, caHT - superbrut_ - totalFrais);
+  const is_ = Math.min(resultat_, REGL.SEUIL_IS_REDUIT) * REGL.TAUX_IS_REDUIT + Math.max(0, resultat_ - REGL.SEUIL_IS_REDUIT) * REGL.TAUX_IS_NORMAL;
+  const maxDivNets = Math.floor((resultat_ - is_) * (1 - REGL.TAUX_FLAT_TAX) / 1000) * 1000;
+  const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, maxDivNets));
+
   const params = {
-    tjm, jours, salaireBrut, ratioDistrib,
+    tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     tauxPatronales: REGL.TAUX_PATRONALES, tauxSalariales: REGL.TAUX_SALARIALES,
     seuilIS: REGL.SEUIL_IS_REDUIT, tauxISReduit: REGL.TAUX_IS_REDUIT, tauxISNormal: REGL.TAUX_IS_NORMAL,
     tauxFlatTax: REGL.TAUX_FLAT_TAX, abattementIR: REGL.ABATTEMENT_IR,
@@ -419,7 +434,7 @@ export default function App() {
     croquerCapital, ageFin, joursLeverLePied
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrut, ratioDistrib, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -442,10 +457,13 @@ export default function App() {
           <Card title="Paramètres d'activité" subtitle="Votre facturation et votre rémunération de président" accent="#2563eb">
             <Slider label="TJM HT" value={tjm} onChange={setTjm} min={400} max={2500} step={50} />
             <Slider label="Jours facturés/an" value={jours} onChange={setJours} min={150} max={230} step={5} format="num" suffix=" j" />
-            <Slider label="Salaire brut annuel" value={salaireBrut} onChange={setSalaireBrut} min={30000} max={120000} step={5000} />
           </Card>
           <Card title="Distribution & projection" subtitle="Combien vous sortez pour vivre vs ce que vous capitalisez" accent="#38a169">
-            <Slider label="Ratio dividendes sortis" value={ratioDistrib} onChange={setRatioDistrib} min={0.1} max={1} step={0.05} format="pct" />
+            <Slider label="Salaire brut annuel" value={salaireBrutEffectif} onChange={setSalaireBrut} min={30000} max={maxSalaireBrut} step={5000} />
+            <Slider label="Dividendes nets annuels" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
+            <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 12, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
+              {fmt(Math.round(divNetsEffectif / 12))}/mois — {fmtPct(r.ratioDistrib)} du bénéfice distribuable
+            </div>
             <Slider label="Rendement placements" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Lever le pied = bosser combien de jours/an" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
