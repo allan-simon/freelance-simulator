@@ -344,15 +344,17 @@ export default function App() {
   const [joursLeverLePied, setJoursLeverLePied] = useState(50);
   const [croquerCapital, setCroquerCapital] = useState(false);
   const [ageFin, setAgeFin] = useState(80);
+  const [per, setPer] = useState(5000);
 
   const [frais] = useState({
     comptable: 3000, rcPro: 800, cfe: 500, banque: 300, bureau: 2000,
     mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 540,
-    divers: 1500, per: 5000
+    divers: 1500
   });
+  const fraisAvecPer = { ...frais, per };
 
   const caHT = tjm * jours;
-  const totalFrais = Object.values(frais).reduce((a, b) => a + b, 0);
+  const totalFrais = Object.values(fraisAvecPer).reduce((a, b) => a + b, 0);
   const maxSalaireBrut = Math.floor((caHT - totalFrais) / 1.42 / 5000) * 5000;
   const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
 
@@ -368,11 +370,11 @@ export default function App() {
     tauxPatronales: 0.42, tauxSalariales: 0.28, seuilIS: 100000,
     tauxISReduit: 0.15, tauxISNormal: 0.25, tauxFlatTax: 0.314,
     abattementIR: 0.10, revenuConjoint: 16800, partsFiscales: 2.5,
-    frais, rendement, ageActuel: 36, ageObjectif,
+    frais: fraisAvecPer, rendement, ageActuel: 36, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, per, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -406,11 +408,26 @@ export default function App() {
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="2. Charges fixes d'exploitation" subtitle="Ce que la société paie quoi qu'il arrive — non lié à votre rémunération" accent="#e53e3e">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-            {Object.entries(frais).map(([k, v]) => (
-              <div key={k} style={{ fontSize: 11, padding: '4px 10px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0', fontFamily: "'JetBrains Mono', monospace" }}>
-                {k === 'rcPro' ? 'RC Pro' : k === 'chequesVacances' ? 'chèques-vacances' : k} : {fmt(v)}
+            {Object.entries(frais).map(([k, v]) => {
+              const labels = {
+                comptable: 'Comptable', rcPro: 'RC Pro', cfe: 'CFE', banque: 'Banque', bureau: 'Bureau',
+                mutuelle: 'Mutuelle', prevoyance: 'Prévoyance', materiel: 'Matériel', chequesVacances: 'Chèques-vacances',
+                divers: 'Divers', per: 'PER'
+              };
+              const tooltips = {
+                cfe: "Cotisation Foncière des Entreprises — impôt local dû par toute entreprise, même sans locaux. Montant variable selon la commune.",
+                per: "Plan d'Épargne Retraite — versement déductible du résultat (réduit l'IS). Capital bloqué jusqu'à 64 ans sauf cas de déblocage anticipé (achat résidence principale, etc.).",
+                rcPro: "Responsabilité Civile Professionnelle — assurance obligatoire couvrant les dommages causés à vos clients dans le cadre de vos missions.",
+                prevoyance: "Contrat de prévoyance complémentaire — couvre l'incapacité de travail, l'invalidité et le décès au-delà des garanties du régime général.",
+                mutuelle: "Complémentaire santé — non obligatoire pour un dirigeant SASU mais fortement recommandée. Déductible du résultat.",
+                chequesVacances: "Chèques-vacances ANCV — exonérés de cotisations sociales et d'impôt sur le revenu dans la limite du SMIC mensuel.",
+              };
+              return (
+              <div key={k} title={tooltips[k] || ''} style={{ fontSize: 11, padding: '4px 10px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0', fontFamily: "'JetBrains Mono', monospace", cursor: tooltips[k] ? 'help' : 'default' }}>
+                {labels[k] || k} : {fmt(v)}{tooltips[k] ? ' ⓘ' : ''}
               </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: '#fff5f5', borderRadius: 8, border: '1px solid #fc8181' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#9b2c2c' }}>Total charges fixes</span>
@@ -439,21 +456,30 @@ export default function App() {
                 <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
               </div>
             </div>
-            {/* Colonne IS + bénéfice */}
-            <div style={{ padding: 12, background: '#fffff0', borderRadius: 8, border: '1px solid #fefcbf' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#975a16', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résultat & IS</div>
-              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span>Résultat avant IS</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(r.resultatAvantIS)}</span>
+            {/* Colonne PER */}
+            <div style={{ padding: 12, background: '#faf5ff', borderRadius: 8, border: '1px solid #d6bcfa' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#553c9a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PER — Plan d'Épargne Retraite</div>
+              <Slider label="Versement annuel PER" value={per} onChange={setPer} min={0} max={15000} step={500} />
+              <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 0, fontStyle: 'italic' }}>
+                Versé par la SASU, déduit du résultat (réduit l'IS) — bloqué jusqu'à 64 ans
               </div>
-              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span>IS (taux effectif {fmtPct(r.tauxEffectifIS)})</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.isTotal)}</span>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#975a16', display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #fefcbf' }}>
-                <span>Bénéfice distribuable</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</span>
-              </div>
+            </div>
+          </div>
+
+          {/* IS + bénéfice */}
+          <div style={{ marginTop: 16, padding: 12, background: '#fffff0', borderRadius: 8, border: '1px solid #fefcbf' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#975a16', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résultat & IS</div>
+            <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span>Résultat avant IS</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(r.resultatAvantIS)}</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span>IS (taux effectif {fmtPct(r.tauxEffectifIS)})</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.isTotal)}</span>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#975a16', display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #fefcbf' }}>
+              <span>Bénéfice distribuable</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</span>
             </div>
           </div>
 
