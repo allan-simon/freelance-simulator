@@ -635,6 +635,54 @@ export default function App() {
           </div>
         </Card>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 16, marginBottom: 16 }}>
+
+          {/* NET NET */}
+          <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
+            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrutEffectif)} moins cotisations salariales (28%) [3]`} />
+            <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
+            <Row label="Prélèvement forfaitaire unique (flat tax 31,4%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]" />
+            <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
+            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts [5]`} />
+            <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
+            <Row label="Net net annuel" value={fmt(r.netNetAnnuel)} bold highlight sub="total à consommer sur l'année" />
+            <Row label="Net net mensuel" value={fmt(r.netNetMensuel)} bold highlight sub="votre vrai budget — loyer, bouffe, vacances, tout" />
+          </Card>
+
+          {/* CAPITALISATION */}
+          <Card title="Capitalisation automatique" subtitle="L'argent qui reste dans la SASU et travaille pour vous, sans y toucher" accent="#9b2c2c">
+            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - r.ratioDistrib)} du distribuable reste dans la SASU`} />
+            <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
+            <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
+            <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />
+            <Row label="PEA — Plan d'Épargne en Actions" value={fmt(r.peaPerso)} sub="200 €/mois depuis votre compte perso — plus-values exonérées d'IR après 5 ans" />
+            <Row label="PER — Plan d'Épargne Retraite" value={fmt(r.per)} sub="versé par la SASU, déduit du résultat (IS) — bloqué jusqu'à 64 ans [8]" />
+            <Row label="Total épargne annuelle" value={fmt(r.epargneTotale)} bold highlight sub="placé chaque année sans effort" />
+          </Card>
+
+          {/* PRÉVOYANCE */}
+          <Card title="Protection sociale & prévoyance" subtitle="Vos filets de sécurité en cas d'arrêt maladie, invalidité ou décès" accent="#d69e2e">
+            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub="régime général, plafonné au PASS (48 060 €/an) [7]" />
+            <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
+            <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
+            <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
+            <Row label="Trésorerie de sécurité recommandée" value={fmt(r.tresoSecurite)} bold highlight sub="6 mois de net net — couvre intercontrat + arrêt maladie" />
+            <Row label="Capital décès (contrat prévoyance)" value={fmt(r.capitalDeces)} sub="~3× salaire brut annuel, versé à votre famille" />
+          </Card>
+        </div>
+
+        {/* HEADLINE STATS */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, marginBottom: 24,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+          <Stat label="Net net mensuel — à consommer" value={fmt(r.netNetMensuel)} color="#22543d" big />
+          <Stat label="CA HT annuel" value={fmtK(r.caHT)} sub="chiffre d'affaires de la SASU" />
+          <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
+          <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
+          <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle (règle des 4%)"} />
+          <Stat label="vs CDI 100k brut" value={`+${fmtPct((r.netNetMensuel - 5580) / 5580)}`} sub="5 580 €/mois en CDI" color="#38a169" />
+        </div>
+
         {/* ÉTAPE 4 : PROJECTION */}
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
@@ -670,54 +718,6 @@ export default function App() {
             )}
           </div>
         </Card>
-
-        {/* HEADLINE STATS */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, marginBottom: 24,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-          <Stat label="Net net mensuel — à consommer" value={fmt(r.netNetMensuel)} color="#22543d" big />
-          <Stat label="CA HT annuel" value={fmtK(r.caHT)} sub="chiffre d'affaires de la SASU" />
-          <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
-          <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
-          <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle (règle des 4%)"} />
-          <Stat label="vs CDI 100k brut" value={`+${fmtPct((r.netNetMensuel - 5580) / 5580)}`} sub="5 580 €/mois en CDI" color="#38a169" />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 16 }}>
-
-          {/* NET NET */}
-          <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
-            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrutEffectif)} moins cotisations salariales (28%) [3]`} />
-            <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
-            <Row label="Prélèvement forfaitaire unique (flat tax 31,4%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]" />
-            <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
-            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts [5]`} />
-            <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
-            <Row label="Net net annuel" value={fmt(r.netNetAnnuel)} bold highlight sub="total à consommer sur l'année" />
-            <Row label="Net net mensuel" value={fmt(r.netNetMensuel)} bold highlight sub="votre vrai budget — loyer, bouffe, vacances, tout" />
-          </Card>
-
-          {/* CAPITALISATION */}
-          <Card title="Capitalisation automatique" subtitle="L'argent qui reste dans la SASU et travaille pour vous, sans y toucher" accent="#9b2c2c">
-            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - r.ratioDistrib)} du distribuable reste dans la SASU`} />
-            <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
-            <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
-            <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />
-            <Row label="PEA — Plan d'Épargne en Actions" value={fmt(r.peaPerso)} sub="200 €/mois depuis votre compte perso — plus-values exonérées d'IR après 5 ans" />
-            <Row label="PER — Plan d'Épargne Retraite" value={fmt(r.per)} sub="versé par la SASU, déduit du résultat (IS) — bloqué jusqu'à 64 ans [8]" />
-            <Row label="Total épargne annuelle" value={fmt(r.epargneTotale)} bold highlight sub="placé chaque année sans effort" />
-          </Card>
-
-          {/* PRÉVOYANCE */}
-          <Card title="Protection sociale & prévoyance" subtitle="Vos filets de sécurité en cas d'arrêt maladie, invalidité ou décès" accent="#d69e2e">
-            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub="régime général, plafonné au PASS (48 060 €/an) [7]" />
-            <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
-            <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
-            <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
-            <Row label="Trésorerie de sécurité recommandée" value={fmt(r.tresoSecurite)} bold highlight sub="6 mois de net net — couvre intercontrat + arrêt maladie" />
-            <Row label="Capital décès (contrat prévoyance)" value={fmt(r.capitalDeces)} sub="~3× salaire brut annuel, versé à votre famille" />
-          </Card>
-        </div>
 
         {/* GRAPHIQUE PROJECTION */}
         <Card title="Timeline complète 36 → 80 ans" subtitle="Patrimoine et revenus à chaque âge — le capital continue de travailler même quand vous levez le pied" accent="#9b2c2c">
