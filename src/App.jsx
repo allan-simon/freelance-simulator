@@ -582,6 +582,17 @@ export default function App() {
               <span>Bénéfice distribuable</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</span>
             </div>
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 11, color: '#975a16', cursor: 'pointer', fontWeight: 600 }}>Détail du compte de résultat</summary>
+              <div style={{ marginTop: 8, padding: '8px 0' }}>
+                <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
+                <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(0.42)} [1]`} />
+                <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
+                <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
+                <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 100 000 € puis 25% [2]`} />
+                <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub="montant max que la SASU peut vous verser en dividendes" />
+              </div>
+            </details>
           </div>
 
           {/* Répartition du bénéfice */}
@@ -673,15 +684,6 @@ export default function App() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 16 }}>
-          {/* COMPTE DE RÉSULTAT */}
-          <Card title="Compte de résultat SASU" subtitle="Ce que la société gagne, paie, et ce qu'il reste à distribuer" accent="#2563eb">
-            <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
-            <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(0.42)} [1]`} />
-            <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
-            <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
-            <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 100 000 € puis 25% [2]`} />
-            <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub="montant max que la SASU peut vous verser en dividendes" />
-          </Card>
 
           {/* NET NET */}
           <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
