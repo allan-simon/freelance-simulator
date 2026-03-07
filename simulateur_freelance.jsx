@@ -2,6 +2,70 @@ import { useState, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // ============================================================
+// CONSTANTES RÉGLEMENTAIRES 2026
+// Modifier ici pour mettre à jour tous les calculs et l'UI
+// ============================================================
+
+const REGL = {
+  // Charges sociales président SASU assimilé salarié [1][3]
+  TAUX_PATRONALES: 0.42,
+  TAUX_SALARIALES: 0.28,
+
+  // Impôt sur les sociétés — LDF 2026 [2]
+  SEUIL_IS_REDUIT: 100000,
+  TAUX_IS_REDUIT: 0.15,
+  TAUX_IS_NORMAL: 0.25,
+
+  // Prélèvement forfaitaire unique — LFSS 2026 [4]
+  TAUX_IR_PFU: 0.128,            // part IR du PFU
+  TAUX_PS_PFU: 0.186,            // part prélèvements sociaux du PFU
+  TAUX_FLAT_TAX: 0.314,          // = IR (12,8%) + PS (18,6%)
+
+  // Barème IR 2026 (revenus 2025, +0,9%) [5]
+  ABATTEMENT_IR: 0.10,
+  TRANCHES_IR: [
+    { seuil: 0, taux: 0 },
+    { seuil: 11600, taux: 0.11 },
+    { seuil: 29579, taux: 0.30 },
+    { seuil: 84577, taux: 0.41 },
+    { seuil: 181917, taux: 0.45 },
+  ],
+
+  // Prévoyance & sécurité sociale [7]
+  SMIC_MENSUEL: 1802,
+  PLAFOND_IJ_COEFF: 1.4,       // plafond IJ = 1,4× SMIC mensuel (depuis avril 2025)
+  TAUX_IJ: 0.50,
+  TAUX_PREVOYANCE: 0.40,       // complément prévoyance = 40% du brut
+  CAPITAL_DECES_COEFF: 3,      // 3× salaire brut
+  MOIS_TRESO_SECURITE: 6,
+
+  // Capitalisation
+  RATIO_CONTRAT_CAPI: 0.65,
+  RATIO_SCPI: 0.20,
+  RATIO_RESERVE_TRESO: 0.15,
+  PEA_ANNUEL: 2400,
+  PEA_PHASE2_ANNUEL: 1200,     // versement PEA réduit en phase "lever le pied"
+  TAUX_RETRAIT_PERPETUEL: 0.04, // règle des 4%
+
+  // Retraite [8]
+  AGE_RETRAITE: 67,             // taux plein automatique
+  AGE_DEBLOCAGE_PER: 64,       // générations ≥ 1969
+  RETRAITE_BASE_MOIS: 1400,
+  RETRAITE_COMP_MOIS: 900,
+
+  // Missions en phase "lever le pied"
+  MARGE_MISSIONS_NETTE: 0.38,  // TJM net après superbrut, cotisations, IS
+
+  // Chèques-vacances [6]
+  CHEQUES_VACANCES_MAX: 540,
+
+  // Comparaison CDI
+  CDI_NET_ANNUEL: 67000,
+  CDI_NET_MENSUEL: 5580,
+  CDI_EPARGNE_MOIS: 500,
+};
+
+// ============================================================
 // MOTEUR DE CALCUL — Toutes les formules sont ici
 // ============================================================
 
@@ -43,25 +107,20 @@ function computeAll(params) {
   const flatTax = divBrutsSortis * tauxFlatTax;
   const divNets = divBrutsSortis - flatTax;
 
-  // --- IR (barème 2025) ---
+  // --- IR (barème 2026) ---
   const revenuImposableVous = salaireNet * (1 - abattementIR);
   const revenuImposableConjoint = revenuConjoint * (1 - abattementIR);
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
   const quotientFamilial = revenuImposableFoyer / partsFiscales;
 
   // Barème progressif
-  const tranches = [
-    { seuil: 0, taux: 0 },
-    { seuil: 11497, taux: 0.11 },
-    { seuil: 29315, taux: 0.30 },
-    { seuil: 83823, taux: 0.41 },
-    { seuil: 180294, taux: 0.45 },
-  ];
+  const tranches = REGL.TRANCHES_IR;
 
   let irParPart = 0;
   let tmi = 0;
   for (let i = tranches.length - 1; i >= 1; i--) {
-    const trancheRevenu = Math.max(0, quotientFamilial - tranches[i].seuil);
+    const upper = i < tranches.length - 1 ? tranches[i + 1].seuil : Infinity;
+    const trancheRevenu = Math.max(0, Math.min(quotientFamilial, upper) - tranches[i].seuil);
     irParPart += trancheRevenu * tranches[i].taux;
     if (trancheRevenu > 0 && tmi === 0) tmi = tranches[i].taux;
   }
@@ -74,20 +133,21 @@ function computeAll(params) {
 
   // --- Capitalisation ---
   const resteSASU = benefDistribuable - divBrutsSortis;
-  const contratCapi = resteSASU * 0.65;
-  const scpi = resteSASU * 0.20;
-  const reserveTreso = resteSASU * 0.15;
-  const peaPerso = 2400;
+  const contratCapi = resteSASU * REGL.RATIO_CONTRAT_CAPI;
+  const scpi = resteSASU * REGL.RATIO_SCPI;
+  const reserveTreso = resteSASU * REGL.RATIO_RESERVE_TRESO;
+  const peaPerso = REGL.PEA_ANNUEL;
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
 
   // --- Prévoyance ---
-  const ijSecuJour = Math.min(salaireBrut, 46368) * 0.5 / 365;
+  const plafondIJ = REGL.SMIC_MENSUEL * REGL.PLAFOND_IJ_COEFF * 12;
+  const ijSecuJour = Math.min(salaireBrut, plafondIJ) * REGL.TAUX_IJ / 365;
   const ijSecuMois = ijSecuJour * 30;
-  const complementPrevoyance = salaireBrut * 0.4 / 12;
+  const complementPrevoyance = salaireBrut * REGL.TAUX_PREVOYANCE / 12;
   const totalCouvertMois = ijSecuMois + complementPrevoyance;
-  const tresoSecurite = netNetMensuel * 6;
-  const capitalDeces = salaireBrut * 3;
+  const tresoSecurite = netNetMensuel * REGL.MOIS_TRESO_SECURITE;
+  const capitalDeces = salaireBrut * REGL.CAPITAL_DECES_COEFF;
 
   // --- Projection COMPLÈTE 36 → ageFin ans ---
   // Phase 1 : 36 → ageObjectif = freelance plein régime, on capitalise
@@ -97,12 +157,12 @@ function computeAll(params) {
   // Si croquerCapital = true : en phase 2+3, on consomme le capital pour qu'il atteigne 0 à ageFin
   // Formule annuité : PMT = PV × r / (1 - (1+r)^-n) (amortissement constant)
   const annees = ageObjectif - ageActuel;
-  const ageRetraite = 67;
-  const retraiteBaseMois = 1400;
-  const retraiteCompMois = 900;
+  const ageRetraite = REGL.AGE_RETRAITE;
+  const retraiteBaseMois = REGL.RETRAITE_BASE_MOIS;
+  const retraiteCompMois = REGL.RETRAITE_COMP_MOIS;
   const retraiteTotaleMois = retraiteBaseMois + retraiteCompMois;
   const joursMissionsPonctuelles = joursLeverLePied;
-  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * 0.45;
+  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * REGL.MARGE_MISSIONS_NETTE;
   
   const projection = [];
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
@@ -126,7 +186,8 @@ function computeAll(params) {
   const drawdownAnnuelBrut = croquerCapital && anneesDrawdown > 0 && rendement > 0
     ? capitalAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
     : 0;
-  const drawdownMensuelNet = drawdownAnnuelBrut * 0.7 / 12; // après flat tax / IS approximé
+  const netApresFiscalite = 1 - tauxFlatTax;
+  const drawdownMensuelNet = drawdownAnnuelBrut * netApresFiscalite / 12; // après flat tax / IS approximé
 
   for (let y = 0; y <= ageFin - ageActuel; y++) {
     const age = ageActuel + y;
@@ -175,7 +236,7 @@ function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendement);
           cumScpi = cumScpi * (1 + rendement);
-          cumPea = cumPea * (1 + rendement) + 1200;
+          cumPea = cumPea * (1 + rendement) + REGL.PEA_PHASE2_ANNUEL;
           cumPer = cumPer * (1 + rendement);
         } else {
           cumCapi = cumCapi * (1 + rendement);
@@ -189,13 +250,13 @@ function computeAll(params) {
       const totalAvecPer = totalHorsPer + cumPer;
       
       // Revenus passifs (mode perpétuel : 4% des fruits)
-      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * 0.7 / 12;
+      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * REGL.TAUX_RETRAIT_PERPETUEL * netApresFiscalite / 12;
       
       // Drawdown mensuel (mode consommation)
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
       
-      const perDebloque = age >= 64;
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * 0.7 / 12) : 0;
+      const perDebloque = age >= REGL.AGE_DEBLOCAGE_PER;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * REGL.TAUX_RETRAIT_PERPETUEL * netApresFiscalite / 12) : 0;
       const retraiteMois = phase === 3 ? retraiteTotaleMois : 0;
       const missionsMois = phase === 2 ? Math.round(revenuMissionsAnnuel / 12) : 0;
       
@@ -231,10 +292,10 @@ function computeAll(params) {
     const dn = db - ft;
     const nn = salaireNet + dn - votreIR + frais.chequesVacances;
     const reste = benefDistribuable - db;
-    const epargne = reste * 0.85 + peaPerso + per;
+    const epargne = reste * (REGL.RATIO_CONTRAT_CAPI + REGL.RATIO_SCPI) + peaPerso + per;
     // FV annuité
     const capitalFin = rendement > 0 ? epargne * ((Math.pow(1 + rendement, annees) - 1) / rendement) : epargne * annees;
-    const revPassif = capitalFin * 0.04 * 0.7 / 12;
+    const revPassif = capitalFin * REGL.TAUX_RETRAIT_PERPETUEL * (1 - tauxFlatTax) / 12;
     return {
       ratio: r,
       netMensuel: Math.round(nn / 12),
@@ -245,8 +306,8 @@ function computeAll(params) {
   });
 
   // CDI comparison
-  const cdiNetAnnuel = 67000;
-  const cdiEpargneMois = 500;
+  const cdiNetAnnuel = REGL.CDI_NET_ANNUEL;
+  const cdiEpargneMois = REGL.CDI_EPARGNE_MOIS;
   const cdiCapital14 = rendement > 0 ? cdiEpargneMois * 12 * ((Math.pow(1 + rendement, annees) - 1) / rendement) : cdiEpargneMois * 12 * annees;
 
   return {
@@ -350,9 +411,10 @@ export default function App() {
 
   const params = {
     tjm, jours, salaireBrut, ratioDistrib,
-    tauxPatronales: 0.45, tauxSalariales: 0.22, seuilIS: 42500,
-    tauxISReduit: 0.15, tauxISNormal: 0.25, tauxFlatTax: 0.30,
-    abattementIR: 0.10, revenuConjoint: 16800, partsFiscales: 2.5,
+    tauxPatronales: REGL.TAUX_PATRONALES, tauxSalariales: REGL.TAUX_SALARIALES,
+    seuilIS: REGL.SEUIL_IS_REDUIT, tauxISReduit: REGL.TAUX_IS_REDUIT, tauxISNormal: REGL.TAUX_IS_NORMAL,
+    tauxFlatTax: REGL.TAUX_FLAT_TAX, abattementIR: REGL.ABATTEMENT_IR,
+    revenuConjoint: 16800, partsFiscales: 2.5,
     frais, rendement, ageActuel: 36, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied
   };
@@ -421,28 +483,28 @@ export default function App() {
           <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
           <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
           <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle (règle des 4%)"} />
-          <Stat label="vs CDI 100k brut" value={`+${fmtPct((r.netNetMensuel - 5580) / 5580)}`} sub="5 580 €/mois en CDI" color="#38a169" />
+          <Stat label="vs CDI 100k brut" value={`+${fmtPct((r.netNetMensuel - REGL.CDI_NET_MENSUEL) / REGL.CDI_NET_MENSUEL)}`} sub={`${fmt(REGL.CDI_NET_MENSUEL)}/mois en CDI`} color="#38a169" />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 16 }}>
           {/* COMPTE DE RÉSULTAT */}
           <Card title="Compte de résultat SASU" subtitle="Ce que la société gagne, paie, et ce qu'il reste à distribuer" accent="#2563eb">
             <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
-            <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrut)} + cotisations patronales ${fmtPct(0.45)}`} />
+            <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrut)} + cotisations patronales ${fmtPct(REGL.TAUX_PATRONALES)} [1]`} />
             <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
             <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
-            <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 42 500 € puis 25%`} />
+            <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : ${fmtPct(REGL.TAUX_IS_REDUIT)} → ${fmt(REGL.SEUIL_IS_REDUIT)} puis ${fmtPct(REGL.TAUX_IS_NORMAL)} [2]`} />
             <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub="montant max que la SASU peut vous verser en dividendes" />
           </Card>
 
           {/* NET NET */}
           <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
-            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrut)} moins cotisations salariales`} />
+            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrut)} moins cotisations salariales (${fmtPct(REGL.TAUX_SALARIALES)}) [3]`} />
             <Row label={`Dividendes bruts sortis (${fmtPct(ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
-            <Row label="Prélèvement forfaitaire unique (flat tax 30%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 17,2% prélèvements sociaux — prélevé à la source" />
+            <Row label={`Prélèvement forfaitaire unique (flat tax ${fmtPct(REGL.TAUX_FLAT_TAX)})`} value={`- ${fmt(r.flatTax)}`} sub={`${fmtPct(REGL.TAUX_IR_PFU)} IR + ${fmtPct(REGL.TAUX_PS_PFU)} prélèvements sociaux — prélevé à la source [4]`} />
             <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
-            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts`} />
-            <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales" />
+            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts [5]`} />
+            <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
             <Row label="Net net annuel" value={fmt(r.netNetAnnuel)} bold highlight sub="total à consommer sur l'année" />
             <Row label="Net net mensuel" value={fmt(r.netNetMensuel)} bold highlight sub="votre vrai budget — loyer, bouffe, vacances, tout" />
           </Card>
@@ -450,17 +512,17 @@ export default function App() {
           {/* CAPITALISATION */}
           <Card title="Capitalisation automatique" subtitle="L'argent qui reste dans la SASU et travaille pour vous, sans y toucher" accent="#9b2c2c">
             <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - ratioDistrib)} du distribuable reste dans la SASU`} />
-            <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie" />
+            <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
             <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
             <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />
             <Row label="PEA — Plan d'Épargne en Actions" value={fmt(r.peaPerso)} sub="200 €/mois depuis votre compte perso — plus-values exonérées d'IR après 5 ans" />
-            <Row label="PER — Plan d'Épargne Retraite" value={fmt(r.per)} sub="versé par la SASU, déduit du résultat (IS) — bloqué jusqu'à 64 ans" />
+            <Row label="PER — Plan d'Épargne Retraite" value={fmt(r.per)} sub={`versé par la SASU, déduit du résultat (IS) — bloqué jusqu'à ${REGL.AGE_DEBLOCAGE_PER} ans [8]`} />
             <Row label="Total épargne annuelle" value={fmt(r.epargneTotale)} bold highlight sub="placé chaque année sans effort" />
           </Card>
 
           {/* PRÉVOYANCE */}
           <Card title="Protection sociale & prévoyance" subtitle="Vos filets de sécurité en cas d'arrêt maladie, invalidité ou décès" accent="#d69e2e">
-            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub="régime général, plafonné au PASS (46 368 €/an)" />
+            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub={`régime général, plafonné à ${REGL.PLAFOND_IJ_COEFF}× SMIC mensuel (~${fmt(REGL.SMIC_MENSUEL * REGL.PLAFOND_IJ_COEFF * 12)}/an) [7]`} />
             <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
             <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
             <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
@@ -578,7 +640,7 @@ export default function App() {
         <Card title="Revenus mensuels à chaque étape de vie" subtitle="Du CDI actuel jusqu'à la retraite — combien vous touchez, d'où ça vient" accent="#38a169">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {[
-              { label: "Aujourd'hui (CDI)", emoji: "💼", value: 5580, sub: "100k brut", color: "#718096" },
+              { label: "Aujourd'hui (CDI)", emoji: "💼", value: REGL.CDI_NET_MENSUEL, sub: "100k brut", color: "#718096" },
               { label: "Freelance", emoji: "🚀", value: Math.round(r.netNetMensuel), sub: `36→${ageObjectif} ans`, color: "#2563eb" },
               { label: `${ageObjectif} ans (${joursLeverLePied}j/an)`, emoji: "⛵",
                 value: (r.projection.find(p => p.age === ageObjectif + 1) || {}).revenuTotalMois || 0,
@@ -612,7 +674,7 @@ export default function App() {
                 <strong>Mode "je croque tout" :</strong> Vous retirez {fmt(r.drawdownMensuelNet)}/mois net de votre capital
                 à partir de {ageObjectif} ans (+ missions + retraite). Le capital atteint 0 € à {ageFin} ans.
                 Après {ageFin} ans il ne reste que la retraite obligatoire ({fmt(r.retraiteTotaleMois)}/mois).
-                <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * 0.04 * 0.7 / 12)) * 100 - 100)}% de revenu en plus
+                <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * REGL.TAUX_RETRAIT_PERPETUEL * (1 - REGL.TAUX_FLAT_TAX) / 12)) * 100 - 100)}% de revenu en plus
                 qu'en rente perpétuelle, mais rien à transmettre.
               </>
             ) : (
@@ -625,9 +687,26 @@ export default function App() {
           </div>
         </Card>
 
-        <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 11, marginTop: 24, fontStyle: 'italic' }}>
+        <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', marginTop: 24,
+          borderLeft: '4px solid #a0aec0', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 700, color: '#1a365d',
+            textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>Sources réglementaires (2026)</h3>
+          <div style={{ fontSize: 11, color: '#4a5568', lineHeight: 1.8, fontFamily: "'DM Sans', sans-serif" }}>
+            <div><strong>[1]</strong> Cotisations patronales ~42% — <a href="https://www.legalstart.fr/fiches-pratiques/sasu/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Legalstart</a> · <a href="https://mon-entreprise.urssaf.fr/simulateurs/sasu" target="_blank" rel="noopener noreferrer">Simulateur URSSAF</a></div>
+            <div><strong>[2]</strong> IS : 15% → 100 000 € puis 25% (LDF 2026) — <a href="https://www.legifiscal.fr/actualites-fiscales/4306-plf-2026-seuil-is-pme-15-porte-100000.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
+            <div><strong>[3]</strong> Cotisations salariales ~28% — <a href="https://www.dougs.fr/blog/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Dougs</a> · <a href="https://entreprendre.service-public.gouv.fr/vosdroits/F36240" target="_blank" rel="noopener noreferrer">Service Public</a></div>
+            <div><strong>[4]</strong> Flat tax 31,4% (LFSS 2026, CSG capital +1,4pt) — <a href="https://www.legifiscal.fr/actualites-fiscales/4320-plfss-2026-flat-tax-314-adopte.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.dougs.fr/blog/flat-taxe-dividendes/" target="_blank" rel="noopener noreferrer">Dougs</a></div>
+            <div><strong>[5]</strong> Barème IR 2026 (revenus 2025, +0,9%) — <a href="https://www.service-public.gouv.fr/particuliers/actualites/A18045" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://simulateur-ir-ifi.impots.gouv.fr/calcul_impot/2026/complet/index.htm" target="_blank" rel="noopener noreferrer">impots.gouv.fr</a></div>
+            <div><strong>[6]</strong> Chèques-vacances ANCV exonérés (plafond ~540 €/an) — <a href="https://www.nexco-expertise.com/cheques-vacances-plafonds-exonerations-2026" target="_blank" rel="noopener noreferrer">Nexco</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-ses-ressources-humaines-et-ses-salaries/entreprises-tout-ce-que-vous-devez-savoir" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
+            <div><strong>[7]</strong> PASS 2026 = 48 060 € · IJ Sécu 50% — <a href="https://www.service-public.fr/particuliers/actualites/A15386" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://www.ameli.fr/entreprise/vos-salaries/arret-de-travail/indemnites-journalieres" target="_blank" rel="noopener noreferrer">ameli.fr</a></div>
+            <div><strong>[8]</strong> PER déblocage 64 ans (âge légal retraite, générations ≥1969) — <a href="https://www.service-public.gouv.fr/particuliers/vosdroits/F34982" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://www.service-public.gouv.fr/particuliers/actualites/A18825" target="_blank" rel="noopener noreferrer">Suspension réforme retraites</a></div>
+            <div><strong>[9]</strong> Contrat de capitalisation luxembourgeois & super-privilège — <a href="https://arkefact.com/contrat-de-capitalisation-luxembourgeois/" target="_blank" rel="noopener noreferrer">Arkefact</a> · <a href="https://www.rothschildandco.com/fr/actualites/publications/2025/01/rothschild-martin-maurel--le-contrat-de-capitalisation-souscrit-par-une-personne-morale-soumise-a-limpot-sur-les-societes/" target="_blank" rel="noopener noreferrer">Rothschild & Co</a></div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 11, marginTop: 16, fontStyle: 'italic' }}>
           Simulation indicative — consultez un expert-comptable et un avocat fiscaliste pour valider votre montage.
-          <br />Barème IR 2025 · Taux IS 2025 · Tous les calculs sont dans le code source, vérifiables.
+          <br />Barème IR 2026 · Taux IS 2026 · Tous les calculs sont dans le code source, vérifiables.
         </div>
       </div>
     </div>
