@@ -22,6 +22,7 @@ export const DEFAULTS = {
   joursLeverLePied: 50,
   croquerCapital: false,
   ageFin: 80,
+  peaPerso: 2400, // versement annuel PEA personnel (200 €/mois) — plafond PEA 150k€ (CMF art. L221-30)
   per: 5000,
   tauxConversionPer: 0.035,  // taux de conversion rente viagère assureur à 64 ans (typiquement 3-4%)
   tme: 0.0345,  // Taux Moyen d'Emprunt d'État (figé à la souscription du contrat capi, CGI 238 septies E)
@@ -329,6 +330,7 @@ export function computeAll(params) {
     fraisEntreeScpi = DEFAULTS.fraisEntreeScpi,
     margeSecurite = DEFAULTS.margeSecurite,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
+    peaPerso = DEFAULTS.peaPerso,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
     salaireBrutCDI = 45000,
@@ -445,7 +447,7 @@ export function computeAll(params) {
   const contratCapi = resteSASU * ratioCapi;
   const scpi = resteSASU * ratioScpi;
   const scpiNet = scpi * (1 - fraisEntreeScpi); // montant effectivement investi après frais de souscription
-  const peaPerso = 2400;
+  // peaPerso : paramètre (DEFAULTS.peaPerso = 2400 €/an)
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
 
