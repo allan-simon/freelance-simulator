@@ -57,9 +57,6 @@ const REGL = {
   RETRAITE_BASE_MOIS: 1400,
   RETRAITE_COMP_MOIS: 900,
 
-  // Missions en phase "lever le pied"
-  MARGE_MISSIONS_NETTE: 0.38,  // TJM net après superbrut, cotisations, IS
-
   // Chèques-vacances [6]
   CHEQUES_VACANCES_MAX: 540,
 
@@ -186,8 +183,15 @@ function computeAll(params) {
   const retraiteBaseMois = REGL.RETRAITE_BASE_MOIS;
   const retraiteCompMois = REGL.RETRAITE_COMP_MOIS;
   const retraiteTotaleMois = retraiteBaseMois + retraiteCompMois;
+  // Phase 2 "lever le pied" : modèle de coûts propre
+  // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle)
+  // CA missions → résultat → IS → dividendes flat tax
   const joursMissionsPonctuelles = joursLeverLePied;
-  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * REGL.MARGE_MISSIONS_NETTE;
+  const caMissions = tjm * joursMissionsPonctuelles;
+  const fraisPhase2 = (frais.comptable || 0) + (frais.rcPro || 0) + (frais.cfe || 0) + (frais.banque || 0) + (frais.mutuelle || 0);
+  const resultatMissions = Math.max(0, caMissions - fraisPhase2);
+  const isMissions = Math.min(resultatMissions, REGL.SEUIL_IS_REDUIT) * REGL.TAUX_IS_REDUIT + Math.max(0, resultatMissions - REGL.SEUIL_IS_REDUIT) * REGL.TAUX_IS_NORMAL;
+  const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - REGL.TAUX_FLAT_TAX);
   
   const projection = [];
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;

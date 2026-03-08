@@ -356,9 +356,15 @@ export function computeAll(params) {
   const annees = ageObjectif - ageActuel;
   const ageRetraite = 67;
   const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif });
+  // Phase 2 "lever le pied" : modèle de coûts propre
+  // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle)
+  // CA missions → résultat → IS → dividendes flat tax
   const joursMissionsPonctuelles = joursLeverLePied;
-  const ratioNetSurCA = caHT > 0 ? netNetAnnuel / caHT : 0;
-  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * ratioNetSurCA;
+  const caMissions = tjm * joursMissionsPonctuelles;
+  const fraisPhase2 = (frais.comptable || 0) + (frais.rcPro || 0) + (frais.cfe || 0) + (frais.banque || 0) + (frais.mutuelle || 0);
+  const resultatMissions = Math.max(0, caMissions - fraisPhase2);
+  const isMissions = Math.min(resultatMissions, seuilIS) * tauxISReduit + Math.max(0, resultatMissions - seuilIS) * tauxISNormal;
+  const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
 
   const projection = [];
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
@@ -634,7 +640,7 @@ export function computeAll(params) {
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
     capitalAtObjectif, capitalHorsPerAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
     drawdownAnnuelBrutAvant64, drawdownAnnuelBrutApres64,
-    joursMissionsPonctuelles, inflation
+    joursMissionsPonctuelles, revenuMissionsAnnuel, inflation
   };
 }
 
