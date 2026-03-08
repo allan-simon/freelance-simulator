@@ -320,30 +320,37 @@ export function computeAll(params) {
   const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
   const anneesApres64 = Math.max(0, ageFin - Math.max(ageObjectif, 64));
 
-  // Avant 64 : on ne consomme que le capital hors PER
-  // Après 64 : on consomme tout (hors PER résiduel + PER débloqué)
+  // Capital drainable à l'entrée de la phase drawdown :
+  // La boucle fait annees-1 contributions (y=1..annees-1 en phase 1).
+  // À y=annees (phase 2), le capital croît PUIS le retrait a lieu.
+  // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
+  // La tréso sécurité couvre le risque lissé → s'amortit linéairement, pas drainable.
+  const anneesContrib = Math.max(0, annees - 1);
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, tresoSecurite: 0, rendement, annees: anneesContrib, inflation });
+  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, tresoSecurite: 0, rendement, annees: anneesContrib, inflation });
+  const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
+
   let drawdownAnnuelBrutAvant64 = 0;
   let drawdownAnnuelBrutApres64 = 0;
+
   if (croquerCapital && rendement > 0) {
     if (ageObjectif >= 64) {
       // Tout est débloqué dès le départ
       drawdownAnnuelBrutApres64 = anneesDrawdown > 0
-        ? capitalAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
+        ? poolTotalAvantRetrait * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
         : 0;
     } else {
-      // Phase 1 : avant 64, on ne touche pas au PER
+      // Phase 1 : avant 64, on consomme le capital hors PER
       if (anneesAvant64 > 0) {
-        drawdownAnnuelBrutAvant64 = capitalHorsPerAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesAvant64));
+        drawdownAnnuelBrutAvant64 = poolHorsPerAvantRetrait * rendement / (1 - Math.pow(1 + rendement, -anneesAvant64));
       }
-      // Phase 2 : à 64 ans, le PER se débloque. Capital restant hors PER + PER capitalisé
+      // Phase 2 : à 64 ans, le PER se débloque et rejoint le pool
       if (anneesApres64 > 0) {
-        // Le PER a grossi avec contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64
-        let perAt64 = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, tresoSecurite: 0, rendement, annees, inflation });
-        // Capitalisation sans contribution de ageObjectif à 64
+        // Le PER a grossi (contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64)
+        let perAt64 = poolPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendement);
-        // Capital hors PER restant après drawdown avant 64 (on recalcule à 64)
-        // Simplification : on projette le solde hors PER qui reste à 64
-        let soldeHorsPer = capitalHorsPerAtObjectif;
+        // Capital hors PER restant (annuité conçue pour drainer à 0)
+        let soldeHorsPer = poolHorsPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) {
           soldeHorsPer = soldeHorsPer * (1 + rendement) - drawdownAnnuelBrutAvant64;
         }
@@ -379,6 +386,7 @@ export function computeAll(params) {
     } else {
       // Les contributions croissent avec l'inflation (le CA croît → le résultat croît → l'épargne croît)
       const infY = Math.pow(1 + inflation, y);
+      let actualWithdrawal = 0;
       if (phase === 1) {
         cumCapi = cumCapi * (1 + rendement) + contratCapi * infY;
         cumScpi = cumScpi * (1 + rendement) + scpi * infY;
@@ -398,18 +406,18 @@ export function computeAll(params) {
         const totalPool = perDebloque
           ? poolCapi + poolScpi + poolPea + poolPer
           : poolCapi + poolScpi + poolPea;
-        const withdrawal = Math.min(currentDrawdown, totalPool);
+        actualWithdrawal = Math.min(currentDrawdown, totalPool);
 
         if (totalPool > 0) {
           const ratio_c = poolCapi / totalPool;
           const ratio_s = poolScpi / totalPool;
           const ratio_p = poolPea / totalPool;
-          cumCapi = poolCapi - withdrawal * ratio_c;
-          cumScpi = poolScpi - withdrawal * ratio_s;
-          cumPea = poolPea - withdrawal * ratio_p;
+          cumCapi = poolCapi - actualWithdrawal * ratio_c;
+          cumScpi = poolScpi - actualWithdrawal * ratio_s;
+          cumPea = poolPea - actualWithdrawal * ratio_p;
           if (perDebloque) {
             const ratio_pe = poolPer / totalPool;
-            cumPer = poolPer - withdrawal * ratio_pe;
+            cumPer = poolPer - actualWithdrawal * ratio_pe;
           } else {
             cumPer = poolPer; // PER grossit mais pas ponctionné
           }
@@ -437,13 +445,20 @@ export function computeAll(params) {
         }
       }
 
-      const totalHorsPer = cumCapi + cumScpi + cumPea + tresoSecurite;
+      // En mode croquer capital, la tréso sécurité disparaît linéairement
+      // (elle absorbe les aléas lissés chaque année → pas un stock permanent)
+      const anneesDepuisObjectif = age - ageObjectif;
+      const tresoRestante = (croquerCapital && phase >= 2)
+        ? Math.max(0, tresoSecurite * (1 - anneesDepuisObjectif / anneesDrawdown))
+        : tresoSecurite;
+
+      const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
       const totalAvecPer = totalHorsPer + cumPer;
 
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * 0.7 / 12;
 
-      const currentDrawdownBrut = (age >= 64) ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
-      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(currentDrawdownBrut * 0.7 / 12) : 0;
+      // drawdownMois = retrait réel (plafonné au pool disponible)
+      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * 0.7 / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
