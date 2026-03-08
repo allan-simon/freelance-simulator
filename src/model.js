@@ -124,6 +124,18 @@ export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
   };
 }
 
+// Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees }) {
+  let tc = 0, ts = 0, tp = 0, tpe = 0;
+  for (let y = 1; y <= annees; y++) {
+    tc = tc * (1 + rendement) + contratCapi;
+    ts = ts * (1 + rendement) + scpi;
+    tp = tp * (1 + rendement) + peaPerso;
+    tpe = tpe * (1 + rendement) + per;
+  }
+  return tc + ts + tp + tpe + tresoSecurite;
+}
+
 // Moteur principal — IDENTIQUE à ce qui tourne dans l'UI
 export function computeAll(params) {
   const {
@@ -226,17 +238,7 @@ export function computeAll(params) {
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
 
   // First pass: capital at ageObjectif for drawdown
-  let capitalAtObjectif = 0;
-  {
-    let tc = 0, ts = 0, tp = 0, tpe = 0;
-    for (let y = 1; y <= annees; y++) {
-      tc = tc * (1 + rendement) + contratCapi;
-      ts = ts * (1 + rendement) + scpi;
-      tp = tp * (1 + rendement) + peaPerso;
-      tpe = tpe * (1 + rendement) + per;
-    }
-    capitalAtObjectif = tc + ts + tp + tpe + tresoSecurite;
-  }
+  const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees });
 
   const anneesDrawdown = ageFin - ageObjectif;
   const drawdownAnnuelBrut = croquerCapital && anneesDrawdown > 0 && rendement > 0
@@ -335,15 +337,21 @@ export function computeAll(params) {
     }
   }
 
-  // --- Scénarios ratio ---
+  // --- Scénarios ratio (réutilise la même logique que le calcul principal) ---
   const scenariosRatio = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0].map(r => {
     const db = benefDistribuable * r;
-    const ft = db * tauxFlatTax;
-    const dn = db - ft;
+    const dn = db * (1 - tauxFlatTax);
     const nn = salaireNet + dn - votreIR + frais.chequesVacances;
     const reste = benefDistribuable - db;
-    const epargne = reste * 0.85 + peaPerso + per;
-    const capitalFin = rendement > 0 ? epargne * ((Math.pow(1 + rendement, annees) - 1) / rendement) : epargne * annees;
+    const capitalFin = computeCapitalProjection({
+      contratCapi: reste * ratioCapi,
+      scpi: reste * ratioScpi,
+      peaPerso,
+      per,
+      tresoSecurite: nn / 12 * 6,
+      rendement,
+      annees,
+    });
     const revPassif = capitalFin * 0.04 * 0.7 / 12;
     return {
       ratio: r,
