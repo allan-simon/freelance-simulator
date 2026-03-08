@@ -746,23 +746,6 @@ export function computeAll(params) {
     };
   });
 
-  // CDI comparison — mêmes cotisations salariales que SASU (différence = patronales uniquement)
-  const cdiNetAvantIR = salaireBrutCDI - computeCotisationsSalariales(salaireBrutCDI);
-  const cdiNetImposable = computeNetImposable(salaireBrutCDI);
-  const cdiImposable = cdiNetImposable * (1 - abattementIR);
-  const cdiQF = (cdiImposable + revenuConjoint * (1 - abattementIR)) / partsFiscales;
-  let cdiIRParPart = 0;
-  for (let i = 1; i < tranches.length; i++) {
-    const plafond = i < tranches.length - 1 ? tranches[i + 1].seuil : Infinity;
-    cdiIRParPart += Math.max(0, Math.min(cdiQF, plafond) - tranches[i].seuil) * tranches[i].taux;
-  }
-  const cdiIRFoyer = cdiIRParPart * partsFiscales;
-  const cdiImposableFoyer = cdiImposable + revenuConjoint * (1 - abattementIR);
-  const cdiIR = cdiImposableFoyer > 0 ? cdiIRFoyer * (cdiImposable / cdiImposableFoyer) : 0;
-  const cdiNetAnnuel = cdiNetAvantIR - cdiIR;
-  const cdiEpargneMois = 500;
-  const cdiCapital14 = rendement > 0 ? cdiEpargneMois * 12 * ((Math.pow(1 + rendement, annees) - 1) / rendement) : cdiEpargneMois * 12 * annees;
-
   return {
     caHT, totalFrais, chargesPatronales, superbrut, salaireNet,
     totalCharges, resultatAvantIS, baseISReduit, baseISNormal,
@@ -774,7 +757,6 @@ export function computeAll(params) {
     resteSASU, contratCapi, scpi, reserveTreso, peaPerso, per, epargneTotale,
     ijSecuMois, complementPrevoyance, totalCouvertMois, provisionRisque, capitalDeces,
     projection, scenariosRatio, annees,
-    cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
     capitalAtObjectif, capitalHorsPerAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
     drawdownAnnuelBrutAvant64, drawdownAnnuelBrutApres64,
@@ -883,7 +865,6 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   const age67 = r.projection.find(p => p.age === 67);
   const age75 = r.projection.find(p => p.age === 75);
   L.push('  Jalons de vie :');
-  L.push(`    CDI équivalent        : ${fmt(r.cdiNetAnnuel / 12)}/mois | capital ${fmt(r.cdiCapital14)} à ${ageObjectif} ans`);
   L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);
   if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMois)}/mois | patrimoine ${fmt(age50.total)}`);
   if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMois)}/mois | patrimoine ${fmt(age64.total)}`);
