@@ -256,6 +256,7 @@ function getUrlParams() {
     joursLeverLePied: num('joursLeverLePied', DEFAULTS.joursLeverLePied),
     croquerCapital: bool('croquerCapital', DEFAULTS.croquerCapital),
     ageFin: num('ageFin', DEFAULTS.ageFin),
+    peaPerso: num('peaPerso', DEFAULTS.peaPerso),
     per: num('per', DEFAULTS.per),
     salaireBrutCDI: num('salaireBrutCDI', DEFAULTS.salaireBrutCDI),
     ratioTreso: num('ratioTreso', DEFAULTS.ratioTreso),
@@ -285,6 +286,7 @@ export default function App() {
   const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
   const [croquerCapital, setCroquerCapital] = useState(INIT.croquerCapital);
   const [ageFin, setAgeFin] = useState(INIT.ageFin);
+  const [peaPerso, setPeaPerso] = useState(INIT.peaPerso);
   const [per, setPer] = useState(INIT.per);
   const [salaireBrutCDI, setSalaireBrutCDI] = useState(INIT.salaireBrutCDI);
   const [ratioTreso, setRatioTreso] = useState(INIT.ratioTreso);
@@ -309,10 +311,10 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales
+    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -333,6 +335,7 @@ export default function App() {
     set('joursLeverLePied', joursLeverLePied, DEFAULTS.joursLeverLePied);
     set('croquerCapital', croquerCapital, DEFAULTS.croquerCapital);
     set('ageFin', ageFin, DEFAULTS.ageFin);
+    set('peaPerso', peaPerso, DEFAULTS.peaPerso);
     set('per', per, DEFAULTS.per);
     set('salaireBrutCDI', salaireBrutCDI, DEFAULTS.salaireBrutCDI);
     set('ratioTreso', ratioTreso, DEFAULTS.ratioTreso);
@@ -342,7 +345,7 @@ export default function App() {
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, peaPerso, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -568,7 +571,12 @@ export default function App() {
             </div>
             <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · ${partsFiscales} parts [5]`} />
             <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
-            <Row label="PEA (épargne depuis compte perso)" value={`- ${fmt(r.peaPerso)}`} sub="200 €/mois — plus-values exonérées d'IR après 5 ans" />
+            <div style={{ margin: '8px 0 4px', padding: '8px 12px', background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Slider label="PEA (épargne depuis compte perso)" value={peaPerso} onChange={setPeaPerso} min={0} max={12000} step={600} />
+              <div style={{ fontSize: 11, color: '#718096', marginTop: -8, fontStyle: 'italic' }}>
+                {fmt(Math.round(peaPerso / 12))} /mois — plus-values exonérées d'IR après 5 ans
+              </div>
+            </div>
             <Row label="Net net annuel" value={fmt(r.netNetAnnuel)} bold highlight sub="total à consommer sur l'année, après épargne PEA" />
             <Row label="Net net mensuel" value={fmt(r.netNetMensuel)} bold highlight sub="votre vrai budget — loyer, bouffe, vacances, tout" />
           </Card>
@@ -579,7 +587,7 @@ export default function App() {
             <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
             <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
             <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />
-            <Row label="PEA — Plan d'Épargne en Actions" value={fmt(r.peaPerso)} sub="200 €/mois depuis votre compte perso (déjà déduit du net net)" />
+            <Row label="PEA — Plan d'Épargne en Actions" value={fmt(r.peaPerso)} sub={`${fmt(Math.round(peaPerso / 12))} /mois depuis votre compte perso (déjà déduit du net net)`} />
             <Row label="PER — Plan d'Épargne Retraite" value={fmt(r.per)} sub="versé par la SASU, déduit du résultat (IS) — bloqué jusqu'à 64 ans [8]" />
             <Row label="Total épargne annuelle" value={fmt(r.epargneTotale)} bold highlight sub="placé chaque année sans effort" />
           </Card>
