@@ -499,7 +499,9 @@ export function computeAll(params) {
         label: "Freelance"
       });
     } else {
-      // Les contributions croissent avec l'inflation (le CA croît → le résultat croît → l'épargne croît)
+      // Les contributions croissent avec l'inflation : on suppose que CA ET frais croissent
+      // au même rythme (TJM, comptable, RC pro, mutuelle… tous indexés sur l'inflation),
+      // donc le résultat net et l'épargne croissent proportionnellement.
       const infY = Math.pow(1 + inflation, y);
       let actualWithdrawal = 0;
       if (phase === 1) {
