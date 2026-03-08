@@ -629,7 +629,8 @@ export function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendementCapi);
           cumScpi = cumScpi * (1 + rendementScpi);
-          cumPea = cumPea * (1 + rendementPea) + (peaPerso / 2) * infY; // épargne perso réduite de moitié en phase rente (plus de revenu SASU)
+          const peaContrib = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY; // clampé au revenu missions disponible
+          cumPea = cumPea * (1 + rendementPea) + peaContrib;
           cumPer = cumPer * (1 + rendementPer);
         } else {
           cumCapi = cumCapi * (1 + rendementCapi);
@@ -703,7 +704,8 @@ export function computeAll(params) {
       const retraiteMois = phase === 3
         ? Math.round(inflate(retraiteBaseMois) + inflate(retraiteCompMois) * facteurErosionArrco)
         : 0;
-      const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
+      const peaPhase2 = (!croquerCapital && phase === 2) ? Math.min(peaPerso / 2, revenuMissionsAnnuel) : 0;
+      const missionsMois = phase === 2 ? inflate(Math.round((revenuMissionsAnnuel - peaPhase2) / 12)) : 0;
 
       let revenuTotalMois;
       if (phase === 1) {
@@ -730,7 +732,7 @@ export function computeAll(params) {
         const retraiteMoisReel = phase === 3 ? Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco) : 0;
         revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(revenuMissionsAnnuel / 12) + retraiteMoisReel);
       } else if (phase === 2) {
-        revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round(revenuMissionsAnnuel / 12) + (perDebloque ? perRenteMoisReel : 0));
+        revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round((revenuMissionsAnnuel - peaPhase2) / 12) + (perDebloque ? perRenteMoisReel : 0));
       } else {
         const retraiteMoisReel = Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco);
         revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteMoisReel + perRenteMoisReel);
