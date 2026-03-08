@@ -579,8 +579,8 @@ export default function App() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
               <thead>
                 <tr style={{ background: '#1a365d', color: '#fff' }}>
-                  <th style={{ padding: '8px 6px', textAlign: 'center' }}>Ratio</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Div. nets /an</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'center' }}>Ratio</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Net /mois</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Capital {ageObjectif} ans</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Revenu passif /mois</th>
@@ -590,8 +590,8 @@ export default function App() {
                 {r.scenariosRatio.map((s, i) => (
                   <tr key={i} style={{ background: s.isSelected ? '#f0fff4' : i % 2 === 0 ? '#fff' : '#f7fafc',
                     fontWeight: s.isSelected ? 700 : 400, borderLeft: s.isSelected ? '3px solid #38a169' : '3px solid transparent' }}>
-                    <td style={{ padding: '6px', textAlign: 'center' }}>{fmtPct(s.ratio)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.divNets)}</td>
+                    <td style={{ padding: '6px', textAlign: 'center' }}>{fmtPct(s.ratio)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.netMensuel)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmtK(s.capital50)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.revenuPassif)}</td>

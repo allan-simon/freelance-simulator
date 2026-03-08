@@ -465,12 +465,12 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
 
   // Scénarios
   L.push('  Scénarios dividendes vs capitalisation :');
-  L.push('  Ratio   Div.nets/an    Net/mois    Capital@' + ageObjectif + '    Rev.passif/m');
+  L.push('  Div.nets/an   Ratio    Net/mois    Capital@' + ageObjectif + '    Rev.passif/m');
   L.push('  ' + '─'.repeat(72));
   for (const s of r.scenariosRatio) {
     const marker = s.isSelected ? ' ◄' : '';
     L.push(
-      `  ${fmtPct(s.ratio).padStart(6)}  ${fmt(s.divNets).padStart(11)}  ${fmt(s.netMensuel).padStart(10)}  ${fmt(s.capital50).padStart(14)}  ${fmt(s.revenuPassif).padStart(12)}${marker}`
+      `  ${fmt(s.divNets).padStart(11)}  ${fmtPct(s.ratio).padStart(6)}  ${fmt(s.netMensuel).padStart(10)}  ${fmt(s.capital50).padStart(14)}  ${fmt(s.revenuPassif).padStart(12)}${marker}`
     );
   }
   L.push('');
