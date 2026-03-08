@@ -213,7 +213,11 @@ Cas de déblocage anticipé : achat résidence principale, invalidité, décès 
 Enveloppe d'investissement souscrite par la société (personne morale à l'IS).
 
 - **Super-privilège** : actifs ségrégués chez un dépositaire tiers (triangle de sécurité)
-- **Fiscalité IS** : seule la part forfaitaire (105% du TME) est imposée annuellement
+- **Fiscalité IS (contrat multi-support)** :
+  - Pendant la détention : IS annuel sur forfait = versements nets × 105% × TME (figé à la souscription)
+  - TME ~3,45% en 2026 → forfait annuel ~3,62% des versements nets
+  - Au rachat : régularisation = IS sur max(0, gains réels - forfaits cumulés déjà taxés)
+  - NB : contrats mono-support (fonds euros) : IS sur intérêts réels, pas de forfait TME
 - **Liquidité** : rachat partiel ou total à tout moment
 - **Transmission** : pas de limite de durée, transmissible
 

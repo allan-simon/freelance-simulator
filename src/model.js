@@ -15,6 +15,7 @@ export const DEFAULTS = {
   ageFin: 80,
   per: 5000,
   tauxConversionPer: 0.035,  // taux de conversion rente viagère assureur à 64 ans (typiquement 3-4%)
+  tme: 0.0345,  // Taux Moyen d'Emprunt d'État (figé à la souscription du contrat capi, CGI 238 septies E)
   salaireBrutCDI: 45000,
   ratioTreso: 0.15,
   ratioCapi: 0.65,
@@ -182,12 +183,16 @@ export function computeConstraints({
 
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation = 0 }) {
+// Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25 }) {
   let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0;
+  const forfaitTME = 1.05 * tme;
   for (let y = 1; y <= annees; y++) {
     const infY = Math.pow(1 + inflation, y);
     tc = tc * (1 + rendement) + contratCapi * infY;
     tcBase += contratCapi * infY;
+    // Forfait IS annuel sur le contrat capi
+    if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
     ts = ts * (1 + rendement) + scpi * infY;
     tp = tp * (1 + rendement) + peaPerso * infY;
     tpe = tpe * (1 + rendement) + per * infY;
@@ -271,7 +276,7 @@ export function computeAll(params) {
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     fiscNettePea = DEFAULTS.fiscNettePea,
     frais, rendement, ageActuel, ageObjectif,
-    croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035,
+    croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
     salaireBrutCDI = 45000,
     inflation = 0.02
@@ -340,25 +345,29 @@ export function computeAll(params) {
   const fiscNetteScpiEff = 1 - tmi - 0.172;  // revenus fonciers : TMI + PS 17,2% (exclus hausse CSG)
   const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
 
-  // Contrat capi détenu par la SASU : IS sur les gains PUIS flat tax sur la distribution
-  // value = valeur de marché, basis = coût d'acquisition (versements cumulés)
-  // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation :
-  // seuilRestant = max(0, seuilIS - resultatAvantIS) → si l'exploitation consomme le seuil,
-  // les gains capi sont taxés à 25% dès le premier euro.
+  // Contrat capi détenu par la SASU (CGI art. 238 septies E) :
+  // - Pendant la détention : IS annuel sur forfait (versements nets × 105% × TME)
+  //   → déduit de cumCapi dans la boucle, tracké dans cumForfaitsIS
+  // - Au rachat : régularisation IS sur max(0, gains réels - forfaits cumulés), puis flat tax
+  // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
   const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
-  const computeFiscNetteCapi = (value, basis) => {
+  const tauxISEffectif = seuilISRestant > 0 ? tauxISReduit : tauxISNormal; // simplification : le forfait annuel est petit vs le seuil
+  const forfaitTME = 1.05 * tme; // taux forfaitaire annuel appliqué aux versements nets
+  const computeFiscNetteCapi = (value, basis, cumForfaits) => {
     if (value <= 0) return 1 - tauxFlatTax;
     const gain = Math.max(0, value - basis);
-    const isOnGain = Math.min(gain, seuilISRestant) * tauxISReduit + Math.max(0, gain - seuilISRestant) * tauxISNormal;
-    return ((value - isOnGain) / value) * (1 - tauxFlatTax);
+    // Régularisation au rachat : IS seulement sur l'excédent de gain réel vs forfaits déjà taxés
+    const gainNonEncoreTaxe = Math.max(0, gain - (cumForfaits || 0));
+    const isRegul = Math.min(gainNonEncoreTaxe, seuilISRestant) * tauxISReduit + Math.max(0, gainNonEncoreTaxe - seuilISRestant) * tauxISNormal;
+    return ((value - isRegul) / value) * (1 - tauxFlatTax);
   };
 
   // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
-  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cPea, cPer, inclurePer = true) => {
+  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cPea, cPer, inclurePer = true, cForfaits = 0) => {
     const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
     const total = c + s + p + pe;
-    if (total <= 0) return computeFiscNetteCapi(0, 0); // fallback
-    const fCapi = computeFiscNetteCapi(c, cCapiBase || 0);
+    if (total <= 0) return computeFiscNetteCapi(0, 0, 0); // fallback
+    const fCapi = computeFiscNetteCapi(c, cCapiBase || 0, cForfaits);
     return (c * fCapi + s * fiscNetteScpiEff + p * fiscNettePea + pe * fiscNettePerEff) / total;
   };
 
@@ -399,14 +408,15 @@ export function computeAll(params) {
   const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
 
   const projection = [];
-  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
+  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPer = 0, cumForfaitsIS = 0;
 
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
   // On calcule le drawdown en excluant le PER avant 64 ans
-  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation });
+  const projArgs = { tme, tauxISEffectif };
+  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
-  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque, rendement, annees, inflation }).total;
+  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque, rendement, annees, inflation, ...projArgs }).total;
 
   const anneesDrawdown = ageFin - ageObjectif;
   const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
@@ -418,8 +428,8 @@ export function computeAll(params) {
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
   // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
-  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque: 0, rendement, annees: anneesContrib, inflation }).total;
-  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, provisionRisque: 0, rendement, annees: anneesContrib, inflation }).total;
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque: 0, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
+  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, provisionRisque: 0, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
 
   let drawdownAnnuelBrutAvant64 = 0;
@@ -564,6 +574,15 @@ export function computeAll(params) {
         }
       }
 
+      // Forfait IS annuel sur contrat capi (CGI 238 septies E) : 105% TME × versements nets
+      // Payé chaque année par la société, déduit de la valeur du contrat
+      if (cumCapiBase > 0) {
+        const forfaitAnnuel = cumCapiBase * forfaitTME;
+        const isForfait = forfaitAnnuel * tauxISEffectif;
+        cumCapi = Math.max(0, cumCapi - isForfait);
+        cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
+      }
+
       // En mode croquer capital, la provision pour risque s'amortit linéairement
       // (elle absorbe les aléas lissés chaque année → pas un stock permanent)
       const anneesDepuisObjectif = age - ageObjectif;
@@ -574,13 +593,13 @@ export function computeAll(params) {
       const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
       const totalAvecPer = totalHorsPer + cumPer;
 
-      const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, false);
+      const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, false, cumForfaitsIS);
       const tauxRetrait = Math.max(0, rendement - inflation); // SWR = rendement réel, préserve le capital en pouvoir d'achat
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
       const perDebloque = age >= 64;
-      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, perDebloque);
+      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, perDebloque, cumForfaitsIS);
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * fiscPondRetrait / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
@@ -655,6 +674,7 @@ export function computeAll(params) {
       rendement,
       annees,
       inflation,
+      ...projArgs,
     });
     const capitalFin = projScenario.total;
     const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi, peaPerso, per);
