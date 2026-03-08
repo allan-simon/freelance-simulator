@@ -109,7 +109,7 @@ Prélèvement Forfaitaire Unique sur les dividendes : 12,8% d'IR + 18,6% de pré
 
 **Sources primaires :**
 - [CGI art. 200 A](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036428081) — PFU 12,8% (option par défaut)
-- CGI art. 158-3-2° — option au barème progressif (abattement 40%) (lien Legifrance à vérifier)
+- [CGI art. 158-3-2°](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051765203) — option au barème progressif (abattement 40%) (vérifié)
 - [CSS art. L136-7](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033711755) — CSG sur revenus du capital
 - [LFSS 2026 (LOI n° 2025-1757 du 30/12/2025)](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000051093200) — majoration CSG capital +1,4pt → total PS 18,6%
 
@@ -199,7 +199,7 @@ Cas de déblocage anticipé : achat résidence principale, invalidité, décès 
 - Pour TMI 30% : IR effectif = 30% × 90% = 27%, total prélèvements = 27% + 9,1% = 36,1% → **fiscNettePer = 0,639**
 
 **Sources primaires (fiscalité rente) :**
-- CGI art. 158-5-a — abattement 10% sur pensions (lien Legifrance non vérifié, confirmé par source secondaire F415)
+- [CGI art. 158-5-a](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051765203) — abattement 10% sur pensions (vérifié)
 - CSS art. L136-8 — taux CSG sur pensions (lien Legifrance 404, confirmé par source secondaire F2971)
 
 **Sources secondaires (fiscalité rente) :**
