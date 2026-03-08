@@ -274,14 +274,6 @@ export function computeAll(params) {
     inflation = 0.02
   } = params;
 
-  // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
-  const fiscalitePonderee = (cCapi, cScpi, cPea, cPer, inclurePer = true) => {
-    const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
-    const total = c + s + p + pe;
-    if (total <= 0) return fiscNetteCapi; // fallback
-    return (c * fiscNetteCapi + s * fiscNetteScpi + p * fiscNettePea + pe * fiscNettePer) / total;
-  };
-
   // --- CA ---
   const caHT = tjm * jours;
 
@@ -340,6 +332,18 @@ export function computeAll(params) {
   }
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
+
+  // Fiscalité nette par enveloppe — SCPI et PER dépendent de la TMI réelle
+  const fiscNetteScpiEff = 1 - tmi - 0.172;  // revenus fonciers : TMI + PS 17,2% (exclus hausse CSG)
+  const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
+
+  // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
+  const fiscalitePonderee = (cCapi, cScpi, cPea, cPer, inclurePer = true) => {
+    const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
+    const total = c + s + p + pe;
+    if (total <= 0) return fiscNetteCapi; // fallback
+    return (c * fiscNetteCapi + s * fiscNetteScpiEff + p * fiscNettePea + pe * fiscNettePerEff) / total;
+  };
 
   // --- Capitalisation ---
   const resteSASU = benefDistribuable - divBrutsSortis;
@@ -537,7 +541,7 @@ export function computeAll(params) {
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * tauxRetrait * fiscNettePer / 12) : 0;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * tauxRetrait * fiscNettePerEff / 12) : 0;
       // Revenus indexés sur l'inflation → nominal croît, réel constant
       const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
       const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
@@ -646,7 +650,7 @@ export function computeAll(params) {
     isReduit, isNormal, isTotal, tauxEffectifIS, benefDistribuable,
     divBrutsSortis, flatTax, divNets, divNetsMax, ratioDistrib,
     revenuImposableVous, revenuImposableConjoint, revenuImposableFoyer,
-    quotientFamilial, irFoyer, votreIR, tmi,
+    quotientFamilial, irFoyer, votreIR, tmi, fiscNetteScpiEff, fiscNettePerEff,
     netNetAnnuel, netNetMensuel,
     resteSASU, contratCapi, scpi, reserveTreso, peaPerso, per, epargneTotale,
     ijSecuMois, complementPrevoyance, totalCouvertMois, provisionRisque, capitalDeces,
