@@ -43,6 +43,11 @@ const REGL = {
   RATIO_CONTRAT_CAPI: 0.65,
   RATIO_SCPI: 0.20,
   RATIO_RESERVE_TRESO: 0.15,
+  // Fiscalité nette par enveloppe (1 - prélèvements)
+  FISC_NETTE_CAPI: 0.70,   // PFU 30%
+  FISC_NETTE_SCPI: 0.53,   // TMI 30% + PS 17,2%
+  FISC_NETTE_PEA:  0.828,  // PS seules 17,2%
+  FISC_NETTE_PER:  0.55,   // IR TMI + PS (sortie rente)
   PEA_ANNUEL: 2400,
   PEA_PHASE2_ANNUEL: 1200,     // versement PEA réduit en phase "lever le pied"
   TAUX_RETRAIT_PERPETUEL: 0.04, // règle des 4%
@@ -189,8 +194,15 @@ function computeAll(params) {
   const drawdownAnnuelBrut = croquerCapital && anneesDrawdown > 0 && rendement > 0
     ? capitalAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
     : 0;
-  const netApresFiscalite = 1 - tauxFlatTax;
-  const drawdownMensuelNet = drawdownAnnuelBrut * netApresFiscalite / 12; // après flat tax / IS approximé
+  // Fiscalité pondérée par enveloppe
+  const fiscPonderee = (cCapi, cScpi, cPea, cPer, inclurePer = true) => {
+    const total = cCapi + cScpi + cPea + (inclurePer ? cPer : 0);
+    if (total <= 0) return REGL.FISC_NETTE_CAPI;
+    return (cCapi * REGL.FISC_NETTE_CAPI + cScpi * REGL.FISC_NETTE_SCPI + cPea * REGL.FISC_NETTE_PEA
+      + (inclurePer ? cPer * REGL.FISC_NETTE_PER : 0)) / total;
+  };
+  const fiscEstimee = fiscPonderee(contratCapi, scpi, REGL.PEA_ANNUEL, per);
+  const drawdownMensuelNet = drawdownAnnuelBrut * fiscEstimee / 12;
 
   for (let y = 0; y <= ageFin - ageActuel; y++) {
     const age = ageActuel + y;
@@ -253,13 +265,14 @@ function computeAll(params) {
       const totalAvecPer = totalHorsPer + cumPer;
       
       // Revenus passifs (mode perpétuel : 4% des fruits)
-      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * REGL.TAUX_RETRAIT_PERPETUEL * netApresFiscalite / 12;
+      const fiscPondYear = fiscPonderee(cumCapi, cumScpi, cumPea, cumPer, false);
+      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * REGL.TAUX_RETRAIT_PERPETUEL * fiscPondYear / 12;
       
       // Drawdown mensuel (mode consommation)
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
       
       const perDebloque = age >= REGL.AGE_DEBLOCAGE_PER;
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * REGL.TAUX_RETRAIT_PERPETUEL * netApresFiscalite / 12) : 0;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * REGL.TAUX_RETRAIT_PERPETUEL * REGL.FISC_NETTE_PER / 12) : 0;
       const retraiteMois = phase === 3 ? retraiteTotaleMois : 0;
       const missionsMois = phase === 2 ? Math.round(revenuMissionsAnnuel / 12) : 0;
       

@@ -23,6 +23,11 @@ export const DEFAULTS = {
     divers: 1500
   },
   // Constantes réglementaires 2026
+  // Fiscalité nette par enveloppe (1 - prélèvements) — utilisée pour pondérer les retraits
+  fiscNetteCapi: 0.70,   // Contrat capitalisation : PFU 30% (12,8% IR + 17,2% PS)
+  fiscNetteScpi: 0.53,   // SCPI usufruit : revenus fonciers TMI 30% + PS 17,2% ≈ 47%
+  fiscNettePea:  0.828,  // PEA > 5 ans : PS seules 17,2%
+  fiscNettePer:  0.55,   // PER sortie rente : IR TMI ~30% + PS 17,2% (approx)
   tauxSalariales: 0.28,
   seuilIS: 100000,
   tauxISReduit: 0.15,
@@ -215,12 +220,24 @@ export function computeAll(params) {
     tjm, jours, salaireBrut, divNetsVoulus,
     tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
+    fiscNetteCapi = DEFAULTS.fiscNetteCapi,
+    fiscNetteScpi = DEFAULTS.fiscNetteScpi,
+    fiscNettePea = DEFAULTS.fiscNettePea,
+    fiscNettePer = DEFAULTS.fiscNettePer,
     frais, rendement, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
     ratioTreso = 0.15, ratioCapi = 0.65,
     salaireBrutCDI = 45000,
     inflation = 0.02
   } = params;
+
+  // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
+  const fiscalitePonderee = (cCapi, cScpi, cPea, cPer, inclurePer = true) => {
+    const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
+    const total = c + s + p + pe;
+    if (total <= 0) return fiscNetteCapi; // fallback
+    return (c * fiscNetteCapi + s * fiscNetteScpi + p * fiscNettePea + pe * fiscNettePer) / total;
+  };
 
   // --- CA ---
   const caHT = tjm * jours;
@@ -363,7 +380,8 @@ export function computeAll(params) {
   }
   // Pour la compatibilité : drawdownAnnuelBrut est celui de la première phase
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
-  const drawdownMensuelNet = drawdownAnnuelBrut * 0.7 / 12;
+  const fiscPondereeEstimee = fiscalitePonderee(contratCapi, scpi, peaPerso, per);
+  const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
   const deflate = (nominal, years) => inflation > 0 ? nominal / Math.pow(1 + inflation, years) : nominal;
@@ -456,15 +474,17 @@ export function computeAll(params) {
       const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
       const totalAvecPer = totalHorsPer + cumPer;
 
-      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * 0.7 / 12;
+      const fiscPondYear = fiscalitePonderee(cumCapi, cumScpi, cumPea, cumPer, false);
+      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
-      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * 0.7 / 12) : 0;
+      const perDebloque = age >= 64;
+      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumScpi, cumPea, cumPer, perDebloque);
+      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * fiscPondRetrait / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
-      const perDebloque = age >= 64;
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * 0.7 / 12) : 0;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * fiscNettePer / 12) : 0;
       // Revenus indexés sur l'inflation → nominal croît, réel constant
       const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
       const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
@@ -534,7 +554,8 @@ export function computeAll(params) {
       annees,
       inflation,
     });
-    const revPassif = capitalFin * 0.04 * 0.7 / 12;
+    const fiscScenario = fiscalitePonderee(reste * ratioCapi, reste * ratioScpi, peaPerso, per);
+    const revPassif = capitalFin * 0.04 * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {
       ratio: r,

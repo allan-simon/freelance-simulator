@@ -11,12 +11,15 @@ const fmtK = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M €` : `${Math.ro
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 
-function Slider({ label, value, onChange, min, max, step, format = "money", suffix = "" }) {
+function Slider({ label, value, onChange, min, max, step, format = "money", suffix = "", note }) {
   const display = format === "money" ? fmt(value) : format === "pct" ? fmtPct(value) : `${value}${suffix}`;
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 13, color: '#4a5568', fontFamily: "'DM Sans', sans-serif" }}>{label}</span>
+        <span style={{ fontSize: 13, color: '#4a5568', fontFamily: "'DM Sans', sans-serif" }}>
+          {label}
+          {note && <span title={note} style={{ marginLeft: 4, cursor: 'help', opacity: 0.6 }}>&#9432;</span>}
+        </span>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#1a365d', fontFamily: "'JetBrains Mono', monospace" }}>{display}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))}
@@ -522,7 +525,7 @@ export default function App() {
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            <Slider label="Rendement nominal" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
+            <Slider label="Rendement net moyen" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" note="Rendement annuel net de frais, avant inflation — moyenne pondérée de vos enveloppes (CTO, SCPI, PEA, PER)" />
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
