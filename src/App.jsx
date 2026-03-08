@@ -51,6 +51,7 @@ function Slider({ label, value, onChange, min, max, step, format = "money", suff
 function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d', color2 = '#2563eb', color3 = '#38a169', amounts }) {
   const svgRef = useRef(null);
   const dragging = useRef(null);
+  const [offset, setOffset] = useState(0);
 
   const v3 = Math.max(0, 1 - v1 - v2);
   const pct1 = Math.round(v1 * 100);
@@ -97,18 +98,33 @@ function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
   const onDown = useCallback((handle) => (e) => {
     e.preventDefault();
     dragging.current = handle;
-    const b2 = v1 + v2;
+    let prevF = getFrac(e);
+    let cumDelta = 0;
+    const startV1 = v1, startV2 = v2, startOffset = offset;
+    const sum12 = v1 + v2;
 
     const move = (ev) => {
       if (!dragging.current) return;
       ev.preventDefault();
       const f = getFrac(ev);
-      if (handle === 'h1') {
-        const nv1 = snap(Math.max(0, Math.min(b2, f)));
-        onChange(nv1, snap(Math.max(0, b2 - nv1)));
+      let d = f - prevF;
+      d = d - Math.round(d); // normalize to [-0.5, 0.5]
+      cumDelta += d;
+      prevF = f;
+
+      if (handle === 'h0') {
+        // Boundary SCPI/tréso — capi (v2) stays fixed
+        const nv1 = snap(Math.max(0, Math.min(1 - startV2, startV1 - cumDelta)));
+        setOffset(((startOffset + cumDelta) % 1 + 1) % 1);
+        onChange(nv1, startV2);
+      } else if (handle === 'h1') {
+        // Boundary tréso/capi — SCPI (v3) stays fixed
+        const nv1 = snap(Math.max(0, Math.min(sum12, startV1 + cumDelta)));
+        onChange(nv1, snap(Math.max(0, sum12 - nv1)));
       } else {
-        const nv2 = snap(Math.max(0, Math.min(1 - v1, f - v1)));
-        onChange(v1, nv2);
+        // h2: boundary capi/SCPI — tréso (v1) stays fixed
+        const nv2 = snap(Math.max(0, Math.min(1 - startV1, startV2 + cumDelta)));
+        onChange(startV1, nv2);
       }
     };
     const up = () => {
@@ -122,36 +138,40 @@ function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
     document.addEventListener('mouseup', up);
     document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', up);
-  }, [v1, v2, onChange, getFrac]);
+  }, [v1, v2, offset, onChange, getFrac]);
 
-  const [hx1, hy1] = toXY(v1, midR);
-  const [hx2, hy2] = toXY(v1 + v2, midR);
+  // Handle positions on the donut
+  const [hx0, hy0] = toXY(offset, midR);
+  const [hx1, hy1] = toXY(offset + v1, midR);
+  const [hx2, hy2] = toXY(offset + v1 + v2, midR);
 
   // Label positions at midpoint of each arc
   const labelR = R + 12;
-  const [lx1, ly1] = toXY(v1 / 2, labelR);
-  const [lx2, ly2] = toXY(v1 + v2 / 2, labelR);
-  const [lx3, ly3] = toXY(v1 + v2 + v3 / 2, labelR);
+  const [lx1, ly1] = toXY(offset + v1 / 2, labelR);
+  const [lx2, ly2] = toXY(offset + v1 + v2 / 2, labelR);
+  const [lx3, ly3] = toXY(offset + v1 + v2 + v3 / 2, labelR);
+
+  const hStyle = { cursor: 'grab', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' };
 
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <svg ref={svgRef} width={size} height={size} viewBox={`0 0 ${size} ${size}`}
           style={{ touchAction: 'none', userSelect: 'none', overflow: 'visible' }}>
-          <path d={arcPath(0, v1)} fill={color1} />
-          <path d={arcPath(v1, v1 + v2)} fill={color2} />
-          <path d={arcPath(v1 + v2, 1)} fill={color3} />
+          <path d={arcPath(offset, offset + v1)} fill={color1} />
+          <path d={arcPath(offset + v1, offset + v1 + v2)} fill={color2} />
+          <path d={arcPath(offset + v1 + v2, offset + 1)} fill={color3} />
           {pct1 >= 10 && <text x={lx1} y={ly1} textAnchor="middle" dominantBaseline="central"
             style={{ fontSize: 10, fontWeight: 700, fill: color1, pointerEvents: 'none' }}>{pct1}%</text>}
           {pct2 >= 10 && <text x={lx2} y={ly2} textAnchor="middle" dominantBaseline="central"
             style={{ fontSize: 10, fontWeight: 700, fill: color2, pointerEvents: 'none' }}>{pct2}%</text>}
           {pct3 >= 10 && <text x={lx3} y={ly3} textAnchor="middle" dominantBaseline="central"
             style={{ fontSize: 10, fontWeight: 700, fill: color3, pointerEvents: 'none' }}>{pct3}%</text>}
-          <circle cx={hx1} cy={hy1} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2}
-            style={{ cursor: 'grab', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+          <circle cx={hx0} cy={hy0} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
+            onMouseDown={onDown('h0')} onTouchStart={onDown('h0')} />
+          <circle cx={hx1} cy={hy1} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
             onMouseDown={onDown('h1')} onTouchStart={onDown('h1')} />
-          <circle cx={hx2} cy={hy2} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2}
-            style={{ cursor: 'grab', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+          <circle cx={hx2} cy={hy2} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
             onMouseDown={onDown('h2')} onTouchStart={onDown('h2')} />
         </svg>
       </div>
