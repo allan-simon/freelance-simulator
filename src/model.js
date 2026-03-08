@@ -262,6 +262,9 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   const trimestres = Math.min(totalAnnees * 4, TRIMESTRES_REQUIS);
 
   // SAM : 25 meilleures années, salaires plafonnés au PASS
+  // Simplification assumée : pas de revalorisation CNAV des salaires passés, PASS constant.
+  // En réalité les salaires anciens sont revalorisés (≈ inflation) puis plafonnés au PASS de l'année.
+  // Effet net : surestimation du SAM de quelques %, dans le bruit d'un simulateur.
   // Courbe salariale CDI : progression ~2,5%/an nominal (inflation + ancienneté/mérite)
   // salaireBrutCDI = salaire actuel (point d'arrivée), on reconstitue la trajectoire
   const PROGRESSION_SAL = 0.025; // 2,5%/an nominal — INSEE cadres, moyenne long terme
