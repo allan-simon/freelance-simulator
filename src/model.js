@@ -305,7 +305,8 @@ export function computeAll(params) {
   const ageRetraite = 67;
   const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif });
   const joursMissionsPonctuelles = joursLeverLePied;
-  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * 0.45;
+  const ratioNetSurCA = caHT > 0 ? netNetAnnuel / caHT : 0;
+  const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * ratioNetSurCA;
 
   const projection = [];
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
