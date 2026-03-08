@@ -489,6 +489,10 @@ export function computeAll(params) {
   };
 
   // --- Capitalisation ---
+  // ⚠ resteSASU = bénéfice distribuable − dividendes sortis. Le PER n'y figure PAS :
+  // il a déjà été déduit en amont (inclus dans totalFrais → réduit resultatAvantIS).
+  // Ce n'est PAS un double comptage : le PER est une charge déductible de l'IS (flux sortant)
+  // ET un versement épargne (flux entrant dans l'enveloppe PER). Deux flux distincts.
   const resteSASU = benefDistribuable - divBrutsSortis;
   const ratioScpi = Math.max(0, 1 - ratioTreso - ratioCapi);
   const reserveTreso = resteSASU * ratioTreso;
@@ -545,8 +549,9 @@ export function computeAll(params) {
   const anneesApres64 = Math.max(0, ageFin - Math.max(ageObjectif, 64));
 
   // Capital drainable à l'entrée de la phase drawdown :
+  // ⚠ annees - 1 est CORRECT, pas un off-by-one :
   // La boucle fait annees-1 contributions (y=1..annees-1 en phase 1).
-  // À y=annees (phase 2), le capital croît PUIS le retrait a lieu.
+  // À y=annees, age === ageObjectif → phase 2 (plus de contribution, premier retrait).
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
   // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
