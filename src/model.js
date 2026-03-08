@@ -342,13 +342,18 @@ export function computeAll(params) {
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
   // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
+  // Les revenus de placement (forfait TME, revenus SCPI) consomment progressivement le seuil restant.
   const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
-  const tauxISEffectif = seuilISRestant > 0 ? tauxISReduit : tauxISNormal; // simplification : le forfait annuel est petit vs le seuil
+  const computeISOnAmount = (amount) =>
+    Math.min(amount, seuilISRestant) * tauxISReduit + Math.max(0, amount - seuilISRestant) * tauxISNormal;
+  const tauxISMoyen = (amount) => amount > 0 ? computeISOnAmount(amount) / amount : tauxISNormal;
 
   // Fiscalité nette par enveloppe
   // SCPI détenues par la SASU : revenus fonciers taxés à l'IS (pas au barème IR du dirigeant),
   // puis flat tax sur la distribution au dirigeant. Même logique que le contrat capi.
-  const fiscNetteScpiEff = (1 - tauxISEffectif) * (1 - tauxFlatTax);
+  // On estime le revenu SCPI annuel pour calculer le taux IS moyen applicable.
+  const revenuScpiEstime = (resteSASU * ratioScpi) * rendement;
+  const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
   const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
 
   // Contrat capi détenu par la SASU (CGI art. 238 septies E) :
@@ -416,7 +421,9 @@ export function computeAll(params) {
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
   // On calcule le drawdown en excluant le PER avant 64 ans
-  const projArgs = { tme, tauxISEffectif };
+  // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
+  const forfaitEstime = (resteSASU * ratioCapi) * 1.05 * tme;
+  const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime) };
   const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
   const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque, rendement, annees, inflation, ...projArgs }).total;
@@ -440,17 +447,17 @@ export function computeAll(params) {
 
   // Rendement net du drag fiscal annuel sur le capital :
   // - Contrat capi : forfait TME (105% × TME × tauxIS sur les versements nets)
-  //   → drag ≈ forfaitTME × tauxISEffectif × (base/valeur), approximé par un ratio moyen
+  //   → drag ≈ forfaitTME × tauxIS moyen sur le forfait estimé
   // - SCPI : IS sur les revenus fonciers (rendement quasi-entièrement distribué)
-  //   → drag ≈ rendement × tauxISEffectif × (part SCPI / total)
+  //   → drag ≈ rendement × tauxIS moyen sur le revenu SCPI estimé
   // - PEA : pas de drag fiscal annuel (PS uniquement au retrait)
   // On estime le drag moyen pondéré pour la formule d'annuité :
   const ratioScpiEst = Math.max(0, 1 - ratioTreso - ratioCapi);
   const totalCapiScpi = ratioCapi + ratioScpiEst;
   const partCapi = totalCapiScpi > 0 ? ratioCapi / totalCapiScpi : 1; // fallback sans impact (drag × 0 = 0)
   const partScpi = 1 - partCapi;
-  const dragFiscalCapi = forfaitTME * tauxISEffectif; // ~0.9% sur la base (pas sur la valeur), approximé
-  const dragFiscalScpi = rendement * tauxISEffectif;  // IS sur les revenus fonciers
+  const dragFiscalCapi = forfaitTME * tauxISMoyen(forfaitEstime); // ~0.9% sur la base (pas sur la valeur), approximé
+  const dragFiscalScpi = rendement * tauxISMoyen(revenuScpiEstime);  // IS sur les revenus fonciers
   const dragFiscalMoyen = partCapi * dragFiscalCapi + partScpi * dragFiscalScpi;
   const rendementNetDrag = Math.max(0, rendement - dragFiscalMoyen);
 
@@ -599,17 +606,20 @@ export function computeAll(params) {
       }
 
       // Drag fiscal annuel sur le capital détenu par la SASU :
-      // 1) Contrat capi : forfait IS (CGI 238 septies E) = 105% TME × versements nets
-      if (cumCapiBase > 0) {
-        const forfaitAnnuel = cumCapiBase * forfaitTME;
-        const isForfait = forfaitAnnuel * tauxISEffectif;
-        cumCapi = Math.max(0, cumCapi - isForfait);
-        cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
-      }
-      // 2) SCPI : IS sur les revenus fonciers (le rendement SCPI est quasi-entièrement distribué)
-      if (cumScpi > 0) {
-        const revenuScpiAnnuel = cumScpi * rendement;
-        cumScpi = Math.max(0, cumScpi - revenuScpiAnnuel * tauxISEffectif);
+      // Le forfait capi et les revenus SCPI partagent le même seuil IS restant.
+      const forfaitAnnuel = cumCapiBase > 0 ? cumCapiBase * forfaitTME : 0;
+      const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rendement : 0;
+      const totalRevenuIS = forfaitAnnuel + revenuScpiAnnuel;
+      if (totalRevenuIS > 0) {
+        const isTotal = computeISOnAmount(totalRevenuIS);
+        // Répartir l'IS au prorata entre capi et SCPI
+        if (forfaitAnnuel > 0) {
+          cumCapi = Math.max(0, cumCapi - isTotal * (forfaitAnnuel / totalRevenuIS));
+          cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
+        }
+        if (revenuScpiAnnuel > 0) {
+          cumScpi = Math.max(0, cumScpi - isTotal * (revenuScpiAnnuel / totalRevenuIS));
+        }
       }
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
