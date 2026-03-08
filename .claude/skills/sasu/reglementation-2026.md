@@ -93,13 +93,16 @@ Prélèvement Forfaitaire Unique sur les dividendes : 12,8% d'IR + 18,6% de pré
 - [CGI art. 200 A](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036428081) — PFU 12,8% (option par défaut)
 - [CGI art. 158-3-2°](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006307702) — option au barème progressif (abattement 40%)
 - [CSS art. L136-7](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033711755) — CSG sur revenus du capital
-- [LFSS 2026](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000051093200) — majoration CSG capital +1,4pt → total PS 18,6%
+- [LFSS 2026 (LOI n° 2025-1757 du 30/12/2025)](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000051093200) — majoration CSG capital +1,4pt → total PS 18,6%
 
 **Sources secondaires :**
-- [LégiFiscal — PLFSS 2026 flat tax 31,4%](https://www.legifiscal.fr/actualites-fiscales/4320-plfss-2026-flat-tax-314-adopte.html)
+- [LégiFiscal — PLFSS 2026 flat tax 31,4% adopté](https://www.legifiscal.fr/actualites-fiscales/4320-plfss-2026-flat-tax-314-adopte.html)
+- [LégiFiscal — Hausse CSG : placements concernés/exclus](https://www.legifiscal.fr/actualites-fiscales/4369-janvier-2026-hausse-csg-appliquera-certains-placements-financiers.html)
 - [Dougs — Flat tax dividendes](https://www.dougs.fr/blog/flat-taxe-dividendes/)
 
 **Note** : l'option au barème progressif (CGI 200 A 2°) avec abattement 40% (CGI 158-3-2°) peut être avantageuse si TMI ≤ 11%. À chiffrer au cas par cas.
+
+**Exclusions** : la hausse de CSG ne s'applique pas à l'assurance-vie, aux PEL, aux revenus fonciers/plus-values immobilières, ni au livret d'épargne populaire. Le traitement du PER (versions assurantielles) reste flou.
 
 ## [5] Barème IR 2026 (revenus 2025)
 
@@ -146,9 +149,10 @@ Plafond Annuel de la Sécurité Sociale 2026 = 48 060 €. IJ maladie = 50% du s
 **Sources primaires :**
 - [CSS art. D242-4](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006736054) — fixation du PASS
 - [CSS art. R323-4](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006747670) — calcul des IJ maladie (50% du salaire journalier)
-- [Arrêté du 19/12/2025](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000051050000) — PASS 2026
+- [Arrêté du 22/12/2025](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053143451) — PASS 2026 = 48 060 €
 
 **Sources secondaires :**
+- [URSSAF — Plafonds Sécurité sociale](https://www.urssaf.fr/accueil/outils-documentation/taux-baremes/plafonds-securite-sociale.html)
 - [Service Public — PASS 2026](https://www.service-public.fr/particuliers/actualites/A15386)
 - [ameli.fr — IJ maladie](https://www.ameli.fr/entreprise/vos-salaries/arret-de-travail/indemnites-journalieres)
 
