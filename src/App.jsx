@@ -672,19 +672,23 @@ export default function App() {
         <Card title="Revenus mensuels à chaque étape de vie" subtitle="Du CDI actuel jusqu'à la retraite — combien vous touchez, d'où ça vient" accent="#38a169">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {[
-              { label: "Aujourd'hui (CDI)", emoji: "💼", value: 5580, sub: "100k brut", color: "#718096" },
-              { label: "Freelance", emoji: "🚀", value: Math.round(r.netNetMensuel), sub: `36→${ageObjectif} ans`, color: "#2563eb" },
+              { label: "Aujourd'hui (CDI)", emoji: "💼", value: 5580, reel: 5580, sub: "100k brut", color: "#718096" },
+              { label: "Freelance", emoji: "🚀", value: Math.round(r.netNetMensuel), reel: Math.round(r.netNetMensuel), sub: `${ageActuel}→${ageObjectif} ans`, color: "#2563eb" },
               { label: `${ageObjectif} ans (${joursLeverLePied}j/an)`, emoji: "⛵",
                 value: (r.projection.find(p => p.age === ageObjectif + 1) || {}).revenuTotalMois || 0,
+                reel: (r.projection.find(p => p.age === ageObjectif + 1) || {}).revenuTotalMoisReel || 0,
                 sub: `${joursLeverLePied}j missions + passif`, color: "#38a169" },
               { label: "64 ans (PER débloqué)", emoji: "🔓",
                 value: (r.projection.find(p => p.age === 64) || {}).revenuTotalMois || 0,
+                reel: (r.projection.find(p => p.age === 64) || {}).revenuTotalMoisReel || 0,
                 sub: "missions + passif + PER", color: "#6b46c1" },
               { label: `${r.ageRetraite} ans (retraite)`, emoji: "🏖️",
                 value: (r.projection.find(p => p.age === r.ageRetraite) || {}).revenuTotalMois || 0,
+                reel: (r.projection.find(p => p.age === r.ageRetraite) || {}).revenuTotalMoisReel || 0,
                 sub: "passif + retraite + PER", color: "#d69e2e" },
               { label: "75 ans", emoji: "🌅",
                 value: (r.projection.find(p => p.age === 75) || {}).revenuTotalMois || 0,
+                reel: (r.projection.find(p => p.age === 75) || {}).revenuTotalMoisReel || 0,
                 sub: "rente perpétuelle", color: "#9b2c2c" },
             ].map((s, i) => (
               <div key={i} style={{ background: '#f7fafc', borderRadius: 10, padding: 14, textAlign: 'center',
@@ -693,29 +697,38 @@ export default function App() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: s.color }}>{s.label}</div>
                 <div style={{ fontSize: 10, color: '#718096', marginBottom: 6 }}>{s.sub}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: '#1a365d', fontFamily: "'JetBrains Mono', monospace" }}>
-                  {fmt(s.value)}
-                  <span style={{ fontSize: 10, fontWeight: 400, color: '#718096' }}>/mois</span>
+                  {fmt(inflation > 0 ? s.reel : s.value)}
+                  <span style={{ fontSize: 10, fontWeight: 400, color: '#718096' }}>/mois{inflation > 0 ? ` (€ ${new Date().getFullYear()})` : ''}</span>
                 </div>
+                {inflation > 0 && s.reel !== s.value && (
+                  <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {fmt(s.value)} nominal
+                  </div>
+                )}
               </div>
             ))}
           </div>
           <div style={{ marginTop: 16, padding: 12, background: croquerCapital ? '#fff5f5' : '#f0fff4', borderRadius: 8, fontSize: 12,
             color: croquerCapital ? '#9b2c2c' : '#22543d' }}>
-            {croquerCapital ? (
-              <>
-                <strong>Mode "je croque tout" :</strong> Vous retirez {fmt(r.drawdownMensuelNet)}/mois net de votre capital
-                à partir de {ageObjectif} ans (+ missions + retraite). Le capital atteint 0 € à {ageFin} ans.
-                Après {ageFin} ans il ne reste que la retraite obligatoire ({fmt(r.retraiteTotaleMois)}/mois).
-                <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * 0.04 * 0.7 / 12)) * 100 - 100)}% de revenu en plus
-                qu'en rente perpétuelle, mais rien à transmettre.
-              </>
-            ) : (
-              <>
-                <strong>Mode rente perpétuelle :</strong> votre revenu ne baisse jamais en dessous de {fmt((r.projection.find(p => p.age === ageObjectif + 1) || {}).revenuTotalMois || 0)}/mois
-                après {ageObjectif} ans. À {r.ageRetraite} ans, la retraite ({fmt(r.retraiteTotaleMois)}/mois) s'ajoute.
-                Le capital reste intact → transmission aux enfants.
-              </>
-            )}
+            {(() => {
+              const p1 = r.projection.find(p => p.age === ageObjectif + 1) || {};
+              const reelNote = inflation > 0 ? ` (${fmt(p1.revenuTotalMoisReel || 0)} en € ${new Date().getFullYear()})` : '';
+              return croquerCapital ? (
+                <>
+                  <strong>Mode "je croque tout" :</strong> Vous retirez {fmt(r.drawdownMensuelNet)}/mois net de votre capital
+                  à partir de {ageObjectif} ans (+ missions + retraite). Le capital atteint 0 € à {ageFin} ans.
+                  Après {ageFin} ans il ne reste que la retraite obligatoire ({fmt(r.retraiteTotaleMois)}/mois).
+                  <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * 0.04 * 0.7 / 12)) * 100 - 100)}% de revenu en plus
+                  qu'en rente perpétuelle, mais rien à transmettre.
+                </>
+              ) : (
+                <>
+                  <strong>Mode rente perpétuelle :</strong> votre revenu ne baisse jamais en dessous de {fmt(p1.revenuTotalMois || 0)}/mois{reelNote}
+                  {' '}après {ageObjectif} ans. À {r.ageRetraite} ans, la retraite ({fmt(r.retraiteTotaleMois)}/mois) s'ajoute.
+                  Le capital reste intact → transmission aux enfants.
+                </>
+              );
+            })()}
           </div>
         </Card>
 
