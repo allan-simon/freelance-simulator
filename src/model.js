@@ -223,7 +223,7 @@ export function computeConstraints({
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
 export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89 }) {
-  let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0;
+  let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
   for (let y = 1; y <= annees; y++) {
@@ -237,8 +237,9 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
     tp = tp * (1 + rendementPea) + peaPerso * infY;
     tpe = tpe * (1 + rendementPer) + per * infY;
+    tpeBase += per * infY;
   }
-  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, peaValue: tp, perValue: tpe };
+  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, peaValue: tp, perValue: tpe, perBase: tpeBase };
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
@@ -442,13 +443,26 @@ export function computeAll(params) {
     return (basis + gainNetIS * (1 - tauxFlatTax)) / value;
   };
 
+  // Fiscalité PER sortie en capital (CGI art. 154 bis, 163 quatervicies, 200 A) :
+  // - Versements déduits → barème IR (TMI retraite), pas de PS (c'est du capital, pas une pension)
+  // - Gains → PFU (tauxFlatTax)
+  const computeFiscNettePerCapital = (value, basis) => {
+    if (value <= 0) return 1 - tauxFlatTax;
+    const b = Math.min(basis || 0, value);
+    const gains = value - b;
+    return (b * (1 - (tmiRetraite || 0)) + gains * (1 - tauxFlatTax)) / value;
+  };
+
   // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
-  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cPea, cPer, inclurePer = true, cForfaits = 0) => {
+  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cPea, cPer, inclurePer = true, cForfaits = 0, cPerBase = 0) => {
     const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
     const total = c + s + p + pe;
     if (total <= 0) return computeFiscNetteCapi(0, 0, 0); // fallback
     const fCapi = computeFiscNetteCapi(c, cCapiBase || 0, cForfaits);
-    return (c * fCapi + s * fiscNetteScpiEff + p * fiscNettePea + pe * fiscNettePerEff) / total;
+    // PER : sortie capital (croquer) → versements au barème IR, gains au PFU
+    //        sortie rente          → fiscNettePerEff (TMI × 90% + PS)
+    const fPer = croquerCapital ? computeFiscNettePerCapital(pe, cPerBase) : fiscNettePerEff;
+    return (c * fCapi + s * fiscNetteScpiEff + p * fiscNettePea + pe * fPer) / total;
   };
 
   // --- Capitalisation ---
@@ -489,7 +503,7 @@ export function computeAll(params) {
   const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
 
   const projection = [];
-  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPer = 0, cumForfaitsIS = 0;
+  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPer = 0, cumPerBase = 0, cumForfaitsIS = 0;
 
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
@@ -590,9 +604,8 @@ export function computeAll(params) {
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
   // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
   //   Pas de contrainte légale de durée max ni de montant min (modalités contractuelles variables).
-  //   Approximation fiscale : le modèle applique la fiscalité pondérée du pool (flat tax),
-  //   alors qu'en réalité les versements PER déduits sont imposés au barème IR (pas PFU)
-  //   et seuls les gains sont au PFU 30%. L'écart est limité si la TMI ≈ 30%.
+  //   Fiscalité : versements déduits → barème IR (TMI retraite), gains → PFU (tauxFlatTax)
+  //   (CGI art. 154 bis, 163 quatervicies, 200 A)
   // - croquer = false → sortie en rente viagère : capital converti par l'assureur (tauxConversionPer)
   if (croquerCapital && rendementPondereHorsPer > 0) {
     if (ageObjectif >= 64) {
@@ -626,7 +639,7 @@ export function computeAll(params) {
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
   // Estimation headline (encours à ageObjectif) — la boucle recalcule fiscPondRetrait chaque année
   // avec les encours réels (la composition du portefeuille évolue pendant le drawdown)
-  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpiNet, peaPerso, per);
+  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpiNet, peaPerso, per, true, 0, projAtObjectif.perBase);
   const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
@@ -662,6 +675,7 @@ export function computeAll(params) {
         cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
         cumPea = cumPea * (1 + rendementPea) + peaPerso * infY;
         cumPer = cumPer * (1 + rendementPer) + per * infY;
+        cumPerBase += per * infY;
       } else if (croquerCapital) {
         // PER bloqué jusqu'à 64 ans : il grossit mais on ne le ponctione pas
         const perDebloque = age >= 64;
@@ -694,7 +708,9 @@ export function computeAll(params) {
           cumPea = poolPea - actualWithdrawal * ratio_p;
           if (perDebloque) {
             const ratio_pe = poolPer / totalPool;
+            const prevPer = poolPer;
             cumPer = poolPer - actualWithdrawal * ratio_pe;
+            cumPerBase = prevPer > 0 ? cumPerBase * (cumPer / prevPer) : 0;
           } else {
             cumPer = poolPer; // PER grossit mais pas ponctionné
           }
@@ -725,7 +741,7 @@ export function computeAll(params) {
         // Le capital est transféré à l'assureur qui verse une rente nominale fixe à vie
         if (age === 64 && perRenteAnnuelleBrute === 0 && cumPer > 0) {
           perRenteAnnuelleBrute = cumPer * tauxConversionPer;
-          cumPer = 0; // capital parti chez l'assureur
+          cumPer = 0; cumPerBase = 0; // capital parti chez l'assureur
         }
       }
 
@@ -772,7 +788,7 @@ export function computeAll(params) {
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
       const perDebloque = age >= 64;
-      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, perDebloque, cumForfaitsIS);
+      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, perDebloque, cumForfaitsIS, cumPerBase);
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * fiscPondRetrait / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
@@ -859,7 +875,7 @@ export function computeAll(params) {
       ...projArgs,
     });
     const capitalFin = projScenario.total;
-    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi * (1 - fraisEntreeScpi), peaPerso, per);
+    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi * (1 - fraisEntreeScpi), peaPerso, per, true, 0, projScenario.perBase);
     const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - margeSecurite);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
