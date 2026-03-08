@@ -32,6 +32,7 @@ export const DEFAULTS = {
   revenuConjoint: 16800,
   partsFiscales: 2.5,
   ageActuel: 36,
+  inflation: 0.02,
 };
 
 // Cotisations patronales détaillées — président SASU (assimilé salarié cadre)
@@ -88,6 +89,7 @@ export const RANGES = {
   ageObjectif: { min: 42, max: 60, step: 1 },
   joursLeverLePied: { min: 0, max: 150, step: 10 },
   ageFin: { min: 70, max: 95, step: 1 },
+  inflation: { min: 0, max: 0.05, step: 0.005 },
 };
 
 // Calcule les contraintes dynamiques (max salary, max PER, max dividendes)
@@ -214,7 +216,8 @@ export function computeAll(params) {
     frais, rendement, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
     ratioTreso = 0.15, ratioCapi = 0.65,
-    salaireBrutCDI = 45000
+    salaireBrutCDI = 45000,
+    inflation = 0.02
   } = params;
 
   // --- CA ---
@@ -314,6 +317,9 @@ export function computeAll(params) {
     : 0;
   const drawdownMensuelNet = drawdownAnnuelBrut * 0.7 / 12;
 
+  // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
+  const deflate = (nominal, years) => inflation > 0 ? nominal / Math.pow(1 + inflation, years) : nominal;
+
   for (let y = 0; y <= ageFin - ageActuel; y++) {
     const age = ageActuel + y;
     const annee = 2026 + y;
@@ -323,10 +329,11 @@ export function computeAll(params) {
       projection.push({
         age, annee, phase,
         capi: 0, scpiVal: 0, pea: 0, perVal: 0, tresoSecu: tresoSecurite,
-        total: tresoSecurite,
+        total: tresoSecurite, totalReel: tresoSecurite,
         revenuPassifMois: 0, retraiteMois: 0, perRenteMois: 0, missionsMois: 0,
         drawdownMois: 0,
         revenuTotalMois: Math.round(netNetMensuel),
+        revenuTotalMoisReel: Math.round(netNetMensuel),
         label: "Freelance"
       });
     } else {
@@ -375,20 +382,40 @@ export function computeAll(params) {
 
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
 
+      // inflate() : le TJM, salaire, missions, retraite suivent l'inflation → leur nominal croît
+      const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
       const perDebloque = age >= 64;
       const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * 0.7 / 12) : 0;
-      const retraiteMois = phase === 3 ? retraiteTotaleMois : 0;
-      const missionsMois = phase === 2 ? Math.round(revenuMissionsAnnuel / 12) : 0;
+      // Revenus indexés sur l'inflation → nominal croît, réel constant
+      const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
+      const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
 
       let revenuTotalMois;
       if (phase === 1) {
-        revenuTotalMois = Math.round(netNetMensuel);
+        revenuTotalMois = inflate(Math.round(netNetMensuel));
       } else if (croquerCapital) {
         revenuTotalMois = Math.round(drawdownMois + missionsMois + retraiteMois);
       } else if (phase === 2) {
         revenuTotalMois = Math.round(revenuPassifNet + missionsMois + (perDebloque ? perRenteMois : 0));
       } else {
         revenuTotalMois = Math.round(revenuPassifNet + retraiteMois + perRenteMois);
+      }
+
+      // Valeurs en € d'aujourd'hui (pouvoir d'achat)
+      // Ce qui suit l'inflation (travail, missions, retraite) → réel = valeur de base constante
+      // Ce qui vient du capital (passif, drawdown, PER rente) → déflater le nominal
+      const totalReel = Math.round(deflate(totalAvecPer, y));
+      const revenuPassifReel = Math.round(deflate(croquerCapital ? drawdownMois : revenuPassifNet, y));
+      const perRenteMoisReel = Math.round(deflate(perRenteMois, y));
+      let revenuTotalMoisReel;
+      if (phase === 1) {
+        revenuTotalMoisReel = Math.round(netNetMensuel);
+      } else if (croquerCapital) {
+        revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(revenuMissionsAnnuel / 12) + (phase === 3 ? retraiteTotaleMois : 0));
+      } else if (phase === 2) {
+        revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round(revenuMissionsAnnuel / 12) + (perDebloque ? perRenteMoisReel : 0));
+      } else {
+        revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteTotaleMois + perRenteMoisReel);
       }
 
       projection.push({
@@ -400,6 +427,7 @@ export function computeAll(params) {
         revenuPassifMois: Math.round(croquerCapital ? drawdownMois : revenuPassifNet),
         retraiteMois, perRenteMois, missionsMois, drawdownMois,
         revenuTotalMois,
+        totalReel, revenuTotalMoisReel,
         label: phase === 1 ? "Freelance" : phase === 2 ? "Lever le pied" : "Retraite"
       });
     }
@@ -427,12 +455,15 @@ export function computeAll(params) {
       annees,
     });
     const revPassif = capitalFin * 0.04 * 0.7 / 12;
+    const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {
       ratio: r,
       divNets: Math.round(dn),
       netMensuel: Math.round(nn / 12),
       capital50: Math.round(capitalFin),
+      capital50Reel: Math.round(capitalFin / defl),
       revenuPassif: Math.round(revPassif),
+      revenuPassifReel: Math.round(revPassif / defl),
       isSelected: Math.abs(r - ratioDistrib) < 0.001
     };
   });
@@ -456,7 +487,7 @@ export function computeAll(params) {
     cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
     capitalAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
-    joursMissionsPonctuelles
+    joursMissionsPonctuelles, inflation
   };
 }
 
@@ -467,8 +498,8 @@ export function computeAll(params) {
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
-export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r }) {
-  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
+export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r }) {
+  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --inflation ${inflation} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
 
   const L = [];
   L.push(`$ ${cmd}`);
@@ -511,7 +542,8 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
 
   // Step 4
   L.push(`═══ STEP 4 : PROJECTION LONG TERME ═══`);
-  L.push(`  Rendement       : ${fmtPct(rendement)}`);
+  L.push(`  Rendement       : ${fmtPct(rendement)} nominal`);
+  L.push(`  Inflation       : ${fmtPct(inflation)}`);
   L.push(`  Objectif        : ${ageObjectif} ans (${r.annees} ans de freelance)`);
   L.push(`  Jours lever pied: ${joursLeverLePied} j/an`);
   L.push(`  Mode            : ${croquerCapital ? 'Consommer le capital' : 'Rente perpétuelle'}`);
@@ -519,14 +551,25 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   L.push('');
 
   L.push('  Timeline :');
-  L.push('  Age  Phase            Patrimoine     Rev.passif/m  Missions/m  Retraite/m  Total/m');
-  L.push('  ' + '─'.repeat(90));
+  if (inflation > 0) {
+    L.push(`  Age  Phase            Patrimoine     Total/m    (€ ${new Date().getFullYear()})  Patrimoine réel`);
+    L.push('  ' + '─'.repeat(95));
+  } else {
+    L.push('  Age  Phase            Patrimoine     Rev.passif/m  Missions/m  Retraite/m  Total/m');
+    L.push('  ' + '─'.repeat(90));
+  }
   const keyAges = new Set([ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
   for (const p of r.projection) {
     if (keyAges.has(p.age)) {
-      L.push(
-        `  ${String(p.age).padStart(3)}  ${p.label.padEnd(16)} ${fmt(p.total).padStart(14)}  ${fmt(p.revenuPassifMois).padStart(12)}  ${fmt(p.missionsMois).padStart(10)}  ${fmt(p.retraiteMois).padStart(10)}  ${fmt(p.revenuTotalMois).padStart(8)}`
-      );
+      if (inflation > 0) {
+        L.push(
+          `  ${String(p.age).padStart(3)}  ${p.label.padEnd(16)} ${fmt(p.total).padStart(14)}  ${fmt(p.revenuTotalMois).padStart(8)}  ${fmt(p.revenuTotalMoisReel).padStart(10)}  ${fmt(p.totalReel).padStart(14)}`
+        );
+      } else {
+        L.push(
+          `  ${String(p.age).padStart(3)}  ${p.label.padEnd(16)} ${fmt(p.total).padStart(14)}  ${fmt(p.revenuPassifMois).padStart(12)}  ${fmt(p.missionsMois).padStart(10)}  ${fmt(p.retraiteMois).padStart(10)}  ${fmt(p.revenuTotalMois).padStart(8)}`
+        );
+      }
     }
   }
   L.push('');

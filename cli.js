@@ -53,6 +53,7 @@ const croquerCapital = pick('croquerCapital');
 const ageFin = pick('ageFin');
 const ratioTreso = pick('ratioTreso');
 const ratioCapi = pick('ratioCapi');
+const inflation = pick('inflation');
 
 function buildParams() {
   const c = computeConstraints({ tjm, jours, frais, salaireBrut, per });
@@ -66,7 +67,7 @@ function buildParams() {
       tauxFlatTax: DEFAULTS.tauxFlatTax, abattementIR: DEFAULTS.abattementIR,
       revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales: DEFAULTS.partsFiscales,
       frais: fraisAvecPer, rendement, ageActuel: DEFAULTS.ageActuel, ageObjectif,
-      croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi
+      croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi, inflation
     },
     constraints: c,
     perEffectif: c.perEffectif,
@@ -120,8 +121,8 @@ function step3() {
   // formatReport contient steps 1-4, on extrait juste step 3
   const text = formatReport({
     tjm, jours, salaireBrut: params.salaireBrut, per: perEffectif,
-    divNetsVoulus: divNetsEffectif, rendement, ageObjectif, joursLeverLePied,
-    croquerCapital, ageFin, ratioTreso, ratioCapi, r
+    divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
+    croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI: DEFAULTS.salaireBrutCDI, r
   });
   // Afficher seulement steps 1-3 (couper avant step 4)
   const lines = text.split('\n');
@@ -141,8 +142,8 @@ function step4() {
   const r = computeAll(params);
   console.log(formatReport({
     tjm, jours, salaireBrut: params.salaireBrut, per: perEffectif,
-    divNetsVoulus: divNetsEffectif, rendement, ageObjectif, joursLeverLePied,
-    croquerCapital, ageFin, ratioTreso, ratioCapi, r
+    divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
+    croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI: DEFAULTS.salaireBrutCDI, r
   }));
 }
 

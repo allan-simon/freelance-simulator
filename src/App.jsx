@@ -186,6 +186,7 @@ function getUrlParams() {
     salaireBrutCDI: num('salaireBrutCDI', DEFAULTS.salaireBrutCDI),
     ratioTreso: num('ratioTreso', DEFAULTS.ratioTreso),
     ratioCapi: num('ratioCapi', DEFAULTS.ratioCapi),
+    inflation: num('inflation', DEFAULTS.inflation),
   };
 }
 
@@ -210,6 +211,7 @@ export default function App() {
   const [salaireBrutCDI, setSalaireBrutCDI] = useState(INIT.salaireBrutCDI);
   const [ratioTreso, setRatioTreso] = useState(INIT.ratioTreso);
   const [ratioCapi, setRatioCapi] = useState(INIT.ratioCapi);
+  const [inflation, setInflation] = useState(INIT.inflation);
 
   const [frais] = useState(DEFAULTS.frais);
   const caHT = tjm * jours;
@@ -228,10 +230,10 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendement, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi, salaireBrutCDI
+    ratioTreso, ratioCapi, salaireBrutCDI, inflation
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -253,10 +255,11 @@ export default function App() {
     set('salaireBrutCDI', salaireBrutCDI, DEFAULTS.salaireBrutCDI);
     set('ratioTreso', ratioTreso, DEFAULTS.ratioTreso);
     set('ratioCapi', ratioCapi, DEFAULTS.ratioCapi);
+    set('inflation', inflation, DEFAULTS.inflation);
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -273,7 +276,7 @@ export default function App() {
   const handleCopyLLM = () => {
     const text = '```\n' + formatReport({
       tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
-      divNetsVoulus: divNetsEffectif, rendement, ageActuel, ageObjectif, joursLeverLePied,
+      divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied,
       croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r
     }) + '\n```';
     navigator.clipboard.writeText(text).then(() => {
@@ -518,7 +521,8 @@ export default function App() {
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            <Slider label="Rendement placements" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
+            <Slider label="Rendement nominal" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
+            <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
             <Slider label="Salaire brut moyen CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={25000} max={80000} step={5000} format="money" />
@@ -552,7 +556,7 @@ export default function App() {
         </Card>
 
         {/* GRAPHIQUE PROJECTION */}
-        <Card title="Timeline complète 36 → 80 ans" subtitle="Patrimoine et revenus à chaque âge — le capital continue de travailler même quand vous levez le pied" accent="#9b2c2c">
+        <Card title={`Timeline complète ${ageActuel} → ${ageFin} ans`} subtitle="Patrimoine et revenus à chaque âge — le capital continue de travailler même quand vous levez le pied" accent="#9b2c2c">
           <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
             {[
               { label: "Phase 1 : Freelance", age: `36→${ageObjectif}`, color: "#2563eb" },
@@ -576,6 +580,7 @@ export default function App() {
               <Legend />
               <Line yAxisId="patrimoine" type="monotone" dataKey="total" stroke="#1a365d" strokeWidth={3} name="Patrimoine total" dot={false} />
               <Line yAxisId="revenu" type="stepAfter" dataKey="revenuTotalMois" stroke="#38a169" strokeWidth={2.5} name="Revenu total /mois" dot={false} />
+              {inflation > 0 && <Line yAxisId="revenu" type="stepAfter" dataKey="revenuTotalMoisReel" stroke="#e53e3e" strokeWidth={2} name={`Revenu réel /mois (€ ${new Date().getFullYear()})`} dot={false} strokeDasharray="6 3" />}
               <Line yAxisId="revenu" type="stepAfter" dataKey="revenuPassifMois" stroke="#9b2c2c" strokeWidth={1.5} name="Revenus passifs /mois" dot={false} strokeDasharray="5 5" />
               <Line yAxisId="revenu" type="stepAfter" dataKey="retraiteMois" stroke="#d69e2e" strokeWidth={1.5} name="Retraite obligatoire /mois" dot={false} strokeDasharray="3 3" />
             </LineChart>
@@ -596,6 +601,7 @@ export default function App() {
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Retraite</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>PER</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 800 }}>TOTAL /mois</th>
+                  {inflation > 0 && <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 800, background: '#2d3748', fontSize: 10 }}>en € {new Date().getFullYear()}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -615,6 +621,7 @@ export default function App() {
                         <td style={{ padding: '6px', textAlign: 'right' }}>{p.retraiteMois > 0 ? fmt(p.retraiteMois) : '—'}</td>
                         <td style={{ padding: '6px', textAlign: 'right' }}>{p.perRenteMois > 0 ? fmt(p.perRenteMois) : '—'}</td>
                         <td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: '#22543d' }}>{fmt(p.revenuTotalMois)}</td>
+                        {inflation > 0 && <td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: '#9b2c2c', background: i % 2 === 0 ? '#fff5f5' : '#fffafa' }}>{fmt(p.revenuTotalMoisReel)}</td>}
                       </tr>
                     );
                   })}
@@ -641,6 +648,7 @@ export default function App() {
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Net /mois</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Capital {ageObjectif} ans</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Rente /mois à {ageObjectif} ans</th>
+                  {inflation > 0 && <th style={{ padding: '8px 6px', textAlign: 'right', background: '#2d3748', fontSize: 10 }}>Rente en € {new Date().getFullYear()}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -652,6 +660,7 @@ export default function App() {
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.netMensuel)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmtK(s.capital50)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.revenuPassif)}</td>
+                    {inflation > 0 && <td style={{ padding: '6px', textAlign: 'right', color: '#9b2c2c', background: s.isSelected ? '#fff5f5' : i % 2 === 0 ? '#fffafa' : '#fff5f5' }}>{fmt(s.revenuPassifReel)}</td>}
                   </tr>
                 ))}
               </tbody>
