@@ -648,7 +648,10 @@ export function computeAll(params) {
       const totalAvecPer = totalHorsPer + cumPer;
 
       const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, false, cumForfaitsIS);
-      const tauxRetrait = Math.max(0, rendementNetDrag - inflation); // SWR = rendement réel net du drag fiscal IS, préserve le capital en pouvoir d'achat
+      // SWR prudent : rendement réel net du drag IS, moins 0.5 point de marge
+      // pour absorber le sequence-of-returns risk et la volatilité réelle.
+      // Avec les défauts (5% brut, 2% inflation, ~0.7% drag IS) → SWR ≈ 1.8% au lieu de 2.3%.
+      const tauxRetrait = Math.max(0, rendementNetDrag - inflation - 0.005);
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
@@ -731,7 +734,7 @@ export function computeAll(params) {
     });
     const capitalFin = projScenario.total;
     const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi, peaPerso, per);
-    const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation);
+    const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - 0.005);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {

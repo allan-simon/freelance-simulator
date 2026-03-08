@@ -546,7 +546,7 @@ export default function App() {
           <Stat label="CA HT annuel" value={fmtK(r.caHT)} sub="chiffre d'affaires de la SASU" />
           <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
           <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
-          <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle (règle des 4%)"} />
+          <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle prudente"} />
         </div>
 
         {/* ÉTAPE 4 : PROJECTION */}
@@ -763,7 +763,7 @@ export default function App() {
                 <>
                   <strong>Mode rente perpétuelle :</strong> votre revenu ne baisse jamais en dessous de {fmt(p1.revenuTotalMois || 0)}/mois{reelNote}
                   {' '}après {ageObjectif} ans. À {r.ageRetraite} ans, la retraite ({fmt(r.retraiteTotaleMois)}/mois) s'ajoute.
-                  Le capital reste intact → transmission aux enfants.
+                  Le taux de retrait inclut une marge de sécurité (−0,5 pt) pour absorber la volatilité → le capital est préservé.
                 </>
               );
             })()}
