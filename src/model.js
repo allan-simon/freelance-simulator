@@ -557,7 +557,9 @@ export function computeAll(params) {
   const rendementNetDrag = Math.max(0, rendementPondereHorsPer - dragFiscalMoyen);
 
   // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
-  const tauxReel = Math.max(0.001, rendementNetDrag - inflation);
+  // Marge 0,5 point (même prudence que le mode rente perpétuelle) : le mode croquer capital
+  // est plus risqué (capital à zéro si les rendements déçoivent) → au moins aussi prudent
+  const tauxReel = Math.max(0.001, rendementNetDrag - inflation - 0.005);
 
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
   // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
