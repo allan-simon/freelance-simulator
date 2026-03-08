@@ -247,9 +247,9 @@ Le rendement total (~4,5%) se décompose donc en :
 Le simulateur utilise `partDistribScpi = 0.89` pour ne taxer à l'IS que la part distribution.
 
 **Sources primaires :**
-- [CGI art. 206-1](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006308756) — sociétés à l'IS : imposables sur l'ensemble de leurs bénéfices (dont revenus fonciers)
-- [CGI art. 38](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006302098) — bénéfice imposable = variation d'actif net (les plus-values latentes ne sont pas imposées tant que non réalisées)
-- [CGI art. 39 duodecies](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006302346) — régime des plus-values professionnelles (CT/LT)
+- [CGI art. 206-1](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051765059) — sociétés à l'IS : imposables sur l'ensemble de leurs bénéfices (dont revenus fonciers)
+- [CGI art. 38](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051203585) — bénéfice imposable = variation d'actif net (les plus-values latentes ne sont pas imposées tant que non réalisées)
+- [CGI art. 39 duodecies](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051203546) — régime des plus-values professionnelles (CT/LT)
 
 **Sources secondaires :**
 - [ASPIM — Chiffres du marché SCPI](https://www.aspim.fr/chiffres-du-marche-des-FIA-en-immobilier/scpi.html) — taux de distribution moyen 4,72% en 2024
