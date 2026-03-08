@@ -168,7 +168,7 @@ function computeAll(params) {
   const ijSecuMois = ijSecuJour * 30;
   const complementPrevoyance = salaireBrut * REGL.TAUX_PREVOYANCE / 12;
   const totalCouvertMois = ijSecuMois + complementPrevoyance;
-  const tresoSecurite = netNetMensuel * REGL.MOIS_TRESO_SECURITE;
+  const provisionRisque = netNetMensuel * REGL.MOIS_TRESO_SECURITE;
   const capitalDeces = salaireBrut * REGL.CAPITAL_DECES_COEFF;
 
   // --- Projection COMPLÈTE 36 → ageFin ans ---
@@ -207,7 +207,7 @@ function computeAll(params) {
       tp = tp * (1 + rendement) + peaPerso;
       tpe = tpe * (1 + rendement) + per;
     }
-    capitalAtObjectif = tc + ts + tp + tpe + tresoSecurite;
+    capitalAtObjectif = tc + ts + tp + tpe + provisionRisque;
   }
 
   // Drawdown annuel si on croque le capital de ageObjectif à ageFin
@@ -234,8 +234,8 @@ function computeAll(params) {
     if (y === 0) {
       projection.push({
         age, annee, phase,
-        capi: 0, scpiVal: 0, pea: 0, perVal: 0, tresoSecu: tresoSecurite,
-        total: tresoSecurite,
+        capi: 0, scpiVal: 0, pea: 0, perVal: 0, provisionRisque: provisionRisque,
+        total: provisionRisque,
         revenuPassifMois: 0, retraiteMois: 0, perRenteMois: 0, missionsMois: 0,
         drawdownMois: 0,
         revenuTotalMois: Math.round(netNetMensuel),
@@ -283,7 +283,13 @@ function computeAll(params) {
         }
       }
       
-      const totalHorsPer = cumCapi + cumScpi + cumPea + tresoSecurite;
+      // En mode croquer capital, la provision pour risque s'amortit linéairement
+      const anneesDepuisObjectif = age - ageObjectif;
+      const provisionRestante = (croquerCapital && phase >= 2)
+        ? Math.max(0, provisionRisque * (1 - anneesDepuisObjectif / anneesDrawdown))
+        : provisionRisque;
+
+      const totalHorsPer = cumCapi + cumScpi + cumPea + provisionRestante;
       const totalAvecPer = totalHorsPer + cumPer;
       
       // Revenus passifs (mode perpétuel : 4% des fruits)
@@ -313,7 +319,7 @@ function computeAll(params) {
         age, annee, phase,
         capi: Math.round(cumCapi), scpiVal: Math.round(cumScpi),
         pea: Math.round(cumPea), perVal: Math.round(cumPer),
-        tresoSecu: Math.round(tresoSecurite),
+        provisionRisque: Math.round(provisionRestante),
         total: Math.round(totalAvecPer),
         revenuPassifMois: Math.round(croquerCapital ? drawdownMois : revenuPassifNet),
         retraiteMois, perRenteMois, missionsMois, drawdownMois,
@@ -357,7 +363,7 @@ function computeAll(params) {
     quotientFamilial, irFoyer, votreIR, tmi,
     netNetAnnuel, netNetMensuel,
     resteSASU, contratCapi, scpi, reserveTreso, peaPerso, per, epargneTotale,
-    ijSecuMois, complementPrevoyance, totalCouvertMois, tresoSecurite, capitalDeces,
+    ijSecuMois, complementPrevoyance, totalCouvertMois, provisionRisque, capitalDeces,
     projection, scenariosRatio, annees,
     cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
@@ -580,7 +586,7 @@ export default function App() {
             <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
             <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
             <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
-            <Row label="Trésorerie de sécurité recommandée" value={fmt(r.tresoSecurite)} bold highlight sub="6 mois de net net — couvre intercontrat + arrêt maladie" />
+            <Row label="Provision pour risque" value={fmt(r.provisionRisque)} bold highlight sub="6 mois de net net — couvre intercontrat, arrêt maladie, aléas lissés" />
             <Row label="Capital décès (contrat prévoyance)" value={fmt(r.capitalDeces)} sub="~3× salaire brut annuel, versé à votre famille" />
           </Card>
         </div>

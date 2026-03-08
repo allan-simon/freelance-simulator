@@ -435,7 +435,7 @@ export function computeAll(params) {
     if (y === 0) {
       projection.push({
         age, annee, phase,
-        capi: 0, scpiVal: 0, pea: 0, perVal: 0, tresoSecu: provisionRisque,
+        capi: 0, scpiVal: 0, pea: 0, perVal: 0, provisionRisque: provisionRisque,
         total: provisionRisque, totalReel: provisionRisque,
         revenuPassifMois: 0, retraiteMois: 0, perRenteMois: 0, missionsMois: 0,
         drawdownMois: 0,
@@ -563,7 +563,7 @@ export function computeAll(params) {
         age, annee, phase,
         capi: Math.round(cumCapi), scpiVal: Math.round(cumScpi),
         pea: Math.round(cumPea), perVal: Math.round(cumPer),
-        tresoSecu: Math.round(provisionRisque),
+        provisionRisque: Math.round(tresoRestante),
         total: Math.round(totalAvecPer),
         revenuPassifMois: Math.round(croquerCapital ? drawdownMois : revenuPassifNet),
         retraiteMois, perRenteMois, missionsMois, drawdownMois,
