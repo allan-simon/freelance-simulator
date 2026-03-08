@@ -143,7 +143,11 @@ export const RANGES = {
 
 // Calcule les contraintes dynamiques (max salary, max PER, max dividendes)
 // à partir des inputs step1 + step2
-export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
+export function computeConstraints({
+  tjm, jours, frais, salaireBrut, per,
+  seuilIS = DEFAULTS.seuilIS, tauxISReduit = DEFAULTS.tauxISReduit,
+  tauxISNormal = DEFAULTS.tauxISNormal, tauxFlatTax = DEFAULTS.tauxFlatTax,
+}) {
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
   // Pour le max salaire, on cherche le brut tel que brut + charges(brut) ≤ disponible
@@ -162,8 +166,8 @@ export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
   const totalFrais = totalFraisHorsPer + perEffectif;
 
   const resultat = Math.max(0, caHT - superbrut - totalFrais);
-  const is = Math.min(resultat, DEFAULTS.seuilIS) * DEFAULTS.tauxISReduit + Math.max(0, resultat - DEFAULTS.seuilIS) * DEFAULTS.tauxISNormal;
-  const maxDivNets = Math.floor((resultat - is) * (1 - DEFAULTS.tauxFlatTax) / 1000) * 1000;
+  const is = Math.min(resultat, seuilIS) * tauxISReduit + Math.max(0, resultat - seuilIS) * tauxISNormal;
+  const maxDivNets = Math.floor((resultat - is) * (1 - tauxFlatTax) / 1000) * 1000;
 
   return {
     caHT,
