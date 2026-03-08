@@ -571,9 +571,9 @@ export default function App() {
         </Card>
 
         {/* SOLVEUR RATIO */}
-        <Card title="Solveur — dividendes vs capitalisation" subtitle="Et si vous changiez le montant de dividendes ? Impact sur votre net et votre patrimoine." accent="#6b46c1">
+        <Card title="Solveur — dividendes vs capitalisation" subtitle={`Et si vous changiez le montant de dividendes ? Impact sur votre net et votre patrimoine à ${ageObjectif} ans (objectif ci-dessus).`} accent="#6b46c1">
           <div style={{ fontSize: 12, color: '#718096', marginBottom: 12 }}>
-            Chaque ligne simule un montant de dividendes nets différent. La ligne surlignée correspond à votre choix actuel ({fmt(r.divNets)}/an).
+            Chaque ligne simule un montant de dividendes nets différent, avec {r.annees} ans de capitalisation (jusqu'à {ageObjectif} ans). La ligne surlignée correspond à votre choix actuel ({fmt(r.divNets)}/an).
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
