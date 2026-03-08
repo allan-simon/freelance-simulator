@@ -200,7 +200,7 @@ Cas de déblocage anticipé : achat résidence principale, invalidité, décès 
 
 **Sources primaires (fiscalité rente) :**
 - CGI art. 158-5-a — abattement 10% sur pensions (lien Legifrance non vérifié, confirmé par source secondaire F415)
-- CSS art. L136-8 — taux CSG sur pensions (lien Legifrance non vérifié, confirmé par source secondaire F2971)
+- CSS art. L136-8 — taux CSG sur pensions (lien Legifrance 404, confirmé par source secondaire F2971)
 
 **Sources secondaires (fiscalité rente) :**
 - [Service Public — Abattement 10% pensions](https://www.service-public.gouv.fr/particuliers/vosdroits/F415) — confirme 10%, plafond 4 439 €/foyer
