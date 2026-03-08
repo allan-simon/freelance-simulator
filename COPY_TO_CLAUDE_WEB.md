@@ -9,9 +9,7 @@ Le simulateur interactif est ici : https://allan-simon.github.io/freelance-simul
 Il accepte des query params pour pré-remplir les valeurs. Exemple :
 https://allan-simon.github.io/freelance-simulator/?tjm=1500&jours=200&ageObjectif=45
 
-Params disponibles : `tjm`, `jours`, `salaireBrut`, `divNetsVoulus`, `rendement`, `ageObjectif`, `joursLeverLePied`, `croquerCapital`, `ageFin`, `per`, `ratioTreso`, `ratioCapi`.
-
-Défauts : TJM 1200, jours 220, salaire brut 60k, dividendes nets 40k, PER 5k, rendement 6%, objectif 50 ans, lever le pied 50j, rente perpétuelle, tréso 15% / capi 65% / SCPI 20%.
+Les query params disponibles correspondent aux clés de `DEFAULTS` dans model.js (scalaires uniquement, pas `frais`). Les valeurs par défaut et ranges valides sont aussi dans model.js (`DEFAULTS` et `RANGES`).
 
 Consignes :
 - Réponds en français, sois direct et chiffré
