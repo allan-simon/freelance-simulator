@@ -229,7 +229,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     tp = tp * (1 + rendementPea) + peaPerso * infY;
     tpe = tpe * (1 + rendementPer) + per * infY;
   }
-  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase };
+  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, peaValue: tp, perValue: tpe };
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
@@ -480,7 +480,8 @@ export function computeAll(params) {
   const rendements = { rendementCapi, rendementScpi, rendementPea, rendementPer };
   const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
-  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs }).total;
+  // projHorsPer calculé plus bas (rendement pondéré) — on y extrait aussi capitalHorsPerAtObjectif
+  let capitalHorsPerAtObjectif;
 
   const anneesDrawdown = ageFin - ageObjectif;
   const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
@@ -529,26 +530,31 @@ export function computeAll(params) {
   let drawdownAnnuelBrutAvant64 = 0;
   let drawdownAnnuelBrutApres64 = 0;
 
-  // Rendement net du drag fiscal annuel sur le capital :
+  // Rendement net du drag fiscal annuel sur le capital (hors PER) :
   // - Contrat capi : forfait TME = 105% × TME × base (versements nets), pas × valeur (encours).
   //   Le ratio base/valeur diminue dans le temps quand les gains s'accumulent.
   //   On estime ce ratio à l'objectif pour la formule d'annuité.
-  // - SCPI : IS sur les revenus fonciers = rendement × valeur → drag direct sur la valeur
-  // - PEA : pas de drag fiscal annuel (PS uniquement au retrait)
-  const ratioScpiEst = Math.max(0, 1 - ratioTreso - ratioCapi);
-  const totalCapiScpi = ratioCapi + ratioScpiEst;
-  const partCapi = totalCapiScpi > 0 ? ratioCapi / totalCapiScpi : 1; // fallback sans impact (drag × 0 = 0)
-  const partScpi = 1 - partCapi;
+  // - SCPI : IS sur les distributions (loyers) = rendementDistrib × valeur → drag direct
+  // - PEA : pas de drag fiscal annuel (PS uniquement au retrait, > 5 ans)
+  // Pondération par les encours estimés à l'objectif (pas les ratios d'allocation initiale)
+  const projHorsPer = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs });
+  capitalHorsPerAtObjectif = projHorsPer.total;
+  const vCapi = projHorsPer.capiValue, vScpi = projHorsPer.scpiValue, vPea = projHorsPer.peaValue;
+  const totalHorsPer = vCapi + vScpi + vPea;
+  const wCapi = totalHorsPer > 0 ? vCapi / totalHorsPer : 0;
+  const wScpi = totalHorsPer > 0 ? vScpi / totalHorsPer : 0;
+  const wPea  = totalHorsPer > 0 ? vPea  / totalHorsPer : 0;
   // Ratio base/valeur du contrat capi à l'objectif (les gains diluent la base)
   const ratioBaseValeur = projAtObjectif.capiValue > 0
     ? projAtObjectif.capiBase / projAtObjectif.capiValue
     : 1;
   const dragFiscalCapi = forfaitTME * tauxISMoyen(forfaitEstime) * ratioBaseValeur; // drag en % de la valeur
   const dragFiscalScpi = rendementScpiDistrib * tauxISMoyen(revenuScpiEstime);  // IS sur les loyers (pas la revalo)
-  const dragFiscalMoyen = partCapi * dragFiscalCapi + partScpi * dragFiscalScpi;
-  // Rendement nominal pondéré des enveloppes SASU (capi + SCPI) soumises au drag IS
-  const rendementPondereCapiScpi = partCapi * rendementCapi + partScpi * rendementScpi;
-  const rendementNetDrag = Math.max(0, rendementPondereCapiScpi - dragFiscalMoyen);
+  // PEA : drag = 0 (pas d'imposition annuelle)
+  const dragFiscalMoyen = wCapi * dragFiscalCapi + wScpi * dragFiscalScpi;
+  // Rendement nominal pondéré de toutes les enveloppes hors PER
+  const rendementPondereHorsPer = wCapi * rendementCapi + wScpi * rendementScpi + wPea * rendementPea;
+  const rendementNetDrag = Math.max(0, rendementPondereHorsPer - dragFiscalMoyen);
 
   // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
   const tauxReel = Math.max(0.001, rendementNetDrag - inflation);
@@ -560,7 +566,7 @@ export function computeAll(params) {
   //   alors qu'en réalité les versements PER déduits sont imposés au barème IR (pas PFU)
   //   et seuls les gains sont au PFU 30%. L'écart est limité si la TMI ≈ 30%.
   // - croquer = false → sortie en rente viagère : capital converti par l'assureur (tauxConversionPer)
-  if (croquerCapital && rendementPondereCapiScpi > 0) {
+  if (croquerCapital && rendementPondereHorsPer > 0) {
     if (ageObjectif >= 64) {
       // Tout est débloqué dès le départ
       drawdownAnnuelBrutApres64 = anneesDrawdown > 0
