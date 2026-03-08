@@ -278,10 +278,6 @@ export function computeAll(params) {
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
-  // --- Net net ---
-  const netNetAnnuel = salaireNet + divNets - votreIR + frais.chequesVacances;
-  const netNetMensuel = netNetAnnuel / 12;
-
   // --- Capitalisation ---
   const resteSASU = benefDistribuable - divBrutsSortis;
   const ratioScpi = Math.max(0, 1 - ratioTreso - ratioCapi);
@@ -291,6 +287,10 @@ export function computeAll(params) {
   const peaPerso = 2400;
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
+
+  // --- Net net (après épargne perso) ---
+  const netNetAnnuel = salaireNet + divNets - votreIR + frais.chequesVacances - peaPerso;
+  const netNetMensuel = netNetAnnuel / 12;
 
   // --- Prévoyance ---
   const ijSecuJour = Math.min(salaireBrut, 48060) * 0.5 / 365;
