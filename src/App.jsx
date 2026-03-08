@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
-import { computeAll } from "./model.js";
+import { computeAll, DEFAULTS, formatReport } from "./model.js";
 
 // ============================================================
 // COMPOSANTS UI
@@ -9,6 +9,7 @@ import { computeAll } from "./model.js";
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 const fmtK = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M €` : `${Math.round(n/1000)}k €`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
+
 
 function Slider({ label, value, onChange, min, max, step, format = "money", suffix = "" }) {
   const display = format === "money" ? fmt(value) : format === "pct" ? fmtPct(value) : `${value}${suffix}`;
@@ -209,16 +210,40 @@ export default function App() {
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
+  const [copied, setCopied] = useState(false);
+  const handleCopyLLM = () => {
+    const text = '```\n' + formatReport({
+      tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
+      divNetsVoulus: divNetsEffectif, rendement, ageObjectif, joursLeverLePied,
+      croquerCapital, ageFin, ratioTreso, ratioCapi, r
+    }) + '\n```';
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#f7fafc', fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet" />
 
       <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '24px 0 20px', marginBottom: 24 }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px' }}>
-          <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-            Simulateur Freelance SASU
-          </h1>
-          <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0' }}>Dev Senior · 15 ans XP · Toutes formules vérifiables</p>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
+              Simulateur Freelance SASU
+            </h1>
+            <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0' }}>Dev Senior · 15 ans XP · Toutes formules vérifiables</p>
+          </div>
+          <button onClick={handleCopyLLM} style={{
+            background: copied ? '#38a169' : 'rgba(255,255,255,0.15)',
+            color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
+            borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            transition: 'all 0.2s',
+          }}>
+            {copied ? 'Copié !' : 'Copy to LLM'}
+          </button>
         </div>
       </div>
 

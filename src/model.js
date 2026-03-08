@@ -322,3 +322,102 @@ export function computeAll(params) {
     joursMissionsPonctuelles
   };
 }
+
+// ============================================================
+// FORMATAGE TEXTE — Source unique pour CLI et bouton "Copy to LLM"
+// ============================================================
+
+const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
+
+export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, r }) {
+  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
+
+  const L = [];
+  L.push(`$ ${cmd}`);
+  L.push('');
+
+  // Step 1
+  L.push(`═══ STEP 1 : CHIFFRE D'AFFAIRES ═══`);
+  L.push(`  TJM          : ${fmt(tjm)}`);
+  L.push(`  Jours/an     : ${jours}`);
+  L.push(`  CA HT        : ${fmt(r.caHT)}`);
+  L.push('');
+
+  // Step 2
+  L.push(`═══ STEP 2 : CHARGES FIXES ═══`);
+  L.push(`  Charges fixes   : ${fmt(r.totalFrais - (r.per || 0))}`);
+  L.push(`  PER             : ${fmt(r.per)}`);
+  L.push(`  Total charges   : ${fmt(r.totalFrais)}`);
+  L.push('');
+
+  // Step 3
+  L.push(`═══ STEP 3 : RÉPARTITION & RÉSULTAT ═══`);
+  L.push(`  Salaire brut    : ${fmt(salaireBrut)} → superbrut ${fmt(r.superbrut)}`);
+  L.push(`  Salaire net     : ${fmt(r.salaireNet)}`);
+  L.push(`  Résultat av. IS : ${fmt(r.resultatAvantIS)}`);
+  L.push(`  IS (${fmtPct(r.tauxEffectifIS)})    : ${fmt(r.isTotal)}`);
+  L.push(`  Bénéf. distrib. : ${fmt(r.benefDistribuable)}`);
+  L.push(`  Dividendes nets : ${fmt(r.divNets)} (flat tax: ${fmt(r.flatTax)})`);
+  L.push(`  IR (votre part) : ${fmt(r.votreIR)} (TMI: ${fmtPct(r.tmi)})`);
+  L.push(`  ► NET NET /AN   : ${fmt(r.netNetAnnuel)}`);
+  L.push(`  ► NET NET /MOIS : ${fmt(r.netNetMensuel)}`);
+  L.push('');
+  L.push(`  Capitalisation :`);
+  L.push(`    Reste en SASU     : ${fmt(r.resteSASU)}`);
+  L.push(`    Contrat capi      : ${fmt(r.contratCapi)}`);
+  L.push(`    SCPI              : ${fmt(r.scpi)}`);
+  L.push(`    Tréso             : ${fmt(r.reserveTreso)}`);
+  L.push(`    PEA perso         : ${fmt(r.peaPerso)}`);
+  L.push(`    Épargne totale/an : ${fmt(r.epargneTotale)}`);
+  L.push('');
+
+  // Step 4
+  L.push(`═══ STEP 4 : PROJECTION LONG TERME ═══`);
+  L.push(`  Rendement       : ${fmtPct(rendement)}`);
+  L.push(`  Objectif        : ${ageObjectif} ans (${r.annees} ans de freelance)`);
+  L.push(`  Jours lever pied: ${joursLeverLePied} j/an`);
+  L.push(`  Mode            : ${croquerCapital ? 'Consommer le capital' : 'Rente perpétuelle'}`);
+  if (croquerCapital) L.push(`  Capital à 0 à   : ${ageFin} ans`);
+  L.push('');
+
+  L.push('  Timeline :');
+  L.push('  Age  Phase            Patrimoine     Rev.passif/m  Missions/m  Retraite/m  Total/m');
+  L.push('  ' + '─'.repeat(90));
+  const keyAges = new Set([DEFAULTS.ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
+  for (const p of r.projection) {
+    if (keyAges.has(p.age)) {
+      L.push(
+        `  ${String(p.age).padStart(3)}  ${p.label.padEnd(16)} ${fmt(p.total).padStart(14)}  ${fmt(p.revenuPassifMois).padStart(12)}  ${fmt(p.missionsMois).padStart(10)}  ${fmt(p.retraiteMois).padStart(10)}  ${fmt(p.revenuTotalMois).padStart(8)}`
+      );
+    }
+  }
+  L.push('');
+
+  // Scénarios
+  L.push('  Scénarios distribution (ratio dividendes/bénéf.) :');
+  L.push('  Ratio    Net/mois    Capital@' + ageObjectif + '    Rev.passif/m');
+  L.push('  ' + '─'.repeat(55));
+  for (const s of r.scenariosRatio) {
+    const marker = s.isSelected ? ' ◄' : '';
+    L.push(
+      `  ${fmtPct(s.ratio).padStart(6)}  ${fmt(s.netMensuel).padStart(10)}  ${fmt(s.capital50).padStart(14)}  ${fmt(s.revenuPassif).padStart(12)}${marker}`
+    );
+  }
+  L.push('');
+
+  // Jalons
+  const age50 = r.projection.find(p => p.age === ageObjectif);
+  const age64 = r.projection.find(p => p.age === 64);
+  const age67 = r.projection.find(p => p.age === 67);
+  const age75 = r.projection.find(p => p.age === 75);
+  L.push('  Jalons de vie :');
+  L.push(`    CDI équivalent        : ${fmt(r.cdiNetAnnuel / 12)}/mois | capital ${fmt(r.cdiCapital14)} à ${ageObjectif} ans`);
+  L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);
+  if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMois)}/mois | patrimoine ${fmt(age50.total)}`);
+  if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMois)}/mois | patrimoine ${fmt(age64.total)}`);
+  if (age67) L.push(`    67 ans (retraite)     : ${fmt(age67.revenuTotalMois)}/mois | patrimoine ${fmt(age67.total)}`);
+  if (age75) L.push(`    75 ans                : ${fmt(age75.revenuTotalMois)}/mois | patrimoine ${fmt(age75.total)}`);
+
+  return L.join('\n');
+}
