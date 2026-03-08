@@ -342,10 +342,14 @@ export function computeAll(params) {
 
   // Contrat capi détenu par la SASU : IS sur les gains PUIS flat tax sur la distribution
   // value = valeur de marché, basis = coût d'acquisition (versements cumulés)
+  // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation :
+  // seuilRestant = max(0, seuilIS - resultatAvantIS) → si l'exploitation consomme le seuil,
+  // les gains capi sont taxés à 25% dès le premier euro.
+  const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
   const computeFiscNetteCapi = (value, basis) => {
     if (value <= 0) return 1 - tauxFlatTax;
     const gain = Math.max(0, value - basis);
-    const isOnGain = Math.min(gain, seuilIS) * tauxISReduit + Math.max(0, gain - seuilIS) * tauxISNormal;
+    const isOnGain = Math.min(gain, seuilISRestant) * tauxISReduit + Math.max(0, gain - seuilISRestant) * tauxISNormal;
     return ((value - isOnGain) / value) * (1 - tauxFlatTax);
   };
 
