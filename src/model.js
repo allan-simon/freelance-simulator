@@ -18,11 +18,11 @@ export const DEFAULTS = {
   ratioCapi: 0.65,
   frais: {
     comptable: 3000, rcPro: 800, cfe: 500, banque: 300, bureau: 2000,
-    mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 540,
+    mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 547,
     divers: 1500
   },
   // Constantes réglementaires 2026
-  tauxPatronales: 0.42,
+  tauxPatronales: 0.45,
   tauxSalariales: 0.28,
   seuilIS: 100000,
   tauxISReduit: 0.15,
@@ -47,17 +47,18 @@ export const RANGES = {
 // à partir des inputs step1 + step2
 export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
   const caHT = tjm * jours;
+  const coeff = 1 + DEFAULTS.tauxPatronales;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
-  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / 1.42 / 5000) * 5000;
+  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / coeff / 5000) * 5000;
   const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
-  const superbrut = salaireBrutEffectif * 1.42;
+  const superbrut = salaireBrutEffectif * coeff;
   const maxPer = Math.max(0, Math.floor((caHT - superbrut - totalFraisHorsPer) / 500) * 500);
   const perEffectif = Math.min(per, maxPer);
   const totalFrais = totalFraisHorsPer + perEffectif;
 
   const resultat = Math.max(0, caHT - superbrut - totalFrais);
-  const is = Math.min(resultat, 100000) * 0.15 + Math.max(0, resultat - 100000) * 0.25;
-  const maxDivNets = Math.floor((resultat - is) * (1 - 0.314) / 1000) * 1000;
+  const is = Math.min(resultat, DEFAULTS.seuilIS) * DEFAULTS.tauxISReduit + Math.max(0, resultat - DEFAULTS.seuilIS) * DEFAULTS.tauxISNormal;
+  const maxDivNets = Math.floor((resultat - is) * (1 - DEFAULTS.tauxFlatTax) / 1000) * 1000;
 
   return {
     caHT,

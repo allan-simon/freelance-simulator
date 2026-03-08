@@ -175,16 +175,13 @@ export default function App() {
   const [ratioTreso, setRatioTreso] = useState(0.15);
   const [ratioCapi, setRatioCapi] = useState(0.65);
 
-  const [frais] = useState({
-    comptable: 3000, rcPro: 800, cfe: 500, banque: 300, bureau: 2000,
-    mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 540,
-    divers: 1500
-  });
+  const [frais] = useState(DEFAULTS.frais);
+  const coeff = 1 + DEFAULTS.tauxPatronales;
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
-  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / 1.42 / 5000) * 5000;
+  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / coeff / 5000) * 5000;
   const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
-  const superbrut_ = salaireBrutEffectif * 1.42;
+  const superbrut_ = salaireBrutEffectif * coeff;
   const maxPer = Math.max(0, Math.floor((caHT - superbrut_ - totalFraisHorsPer) / 500) * 500);
   const perEffectif = Math.min(per, maxPer);
   const fraisAvecPer = { ...frais, per: perEffectif };
@@ -192,16 +189,14 @@ export default function App() {
 
   // Max dividendes nets distribuables
   const resultat_ = Math.max(0, caHT - superbrut_ - totalFrais);
-  const is_ = Math.min(resultat_, 100000) * 0.15 + Math.max(0, resultat_ - 100000) * 0.25;
-  const maxDivNets = Math.floor((resultat_ - is_) * (1 - 0.314) / 1000) * 1000;
+  const is_ = Math.min(resultat_, DEFAULTS.seuilIS) * DEFAULTS.tauxISReduit + Math.max(0, resultat_ - DEFAULTS.seuilIS) * DEFAULTS.tauxISNormal;
+  const maxDivNets = Math.floor((resultat_ - is_) * (1 - DEFAULTS.tauxFlatTax) / 1000) * 1000;
   const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, maxDivNets));
 
   const params = {
+    ...DEFAULTS,
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-    tauxPatronales: 0.42, tauxSalariales: 0.28, seuilIS: 100000,
-    tauxISReduit: 0.15, tauxISNormal: 0.25, tauxFlatTax: 0.314,
-    abattementIR: 0.10, revenuConjoint: 16800, partsFiscales: 2.5,
-    frais: fraisAvecPer, rendement, ageActuel: 36, ageObjectif,
+    frais: fraisAvecPer, rendement, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
     ratioTreso, ratioCapi
   };
