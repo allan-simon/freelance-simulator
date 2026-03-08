@@ -446,17 +446,20 @@ export function computeAll(params) {
   let drawdownAnnuelBrutApres64 = 0;
 
   // Rendement net du drag fiscal annuel sur le capital :
-  // - Contrat capi : forfait TME (105% × TME × tauxIS sur les versements nets)
-  //   → drag ≈ forfaitTME × tauxIS moyen sur le forfait estimé
-  // - SCPI : IS sur les revenus fonciers (rendement quasi-entièrement distribué)
-  //   → drag ≈ rendement × tauxIS moyen sur le revenu SCPI estimé
+  // - Contrat capi : forfait TME = 105% × TME × base (versements nets), pas × valeur (encours).
+  //   Le ratio base/valeur diminue dans le temps quand les gains s'accumulent.
+  //   On estime ce ratio à l'objectif pour la formule d'annuité.
+  // - SCPI : IS sur les revenus fonciers = rendement × valeur → drag direct sur la valeur
   // - PEA : pas de drag fiscal annuel (PS uniquement au retrait)
-  // On estime le drag moyen pondéré pour la formule d'annuité :
   const ratioScpiEst = Math.max(0, 1 - ratioTreso - ratioCapi);
   const totalCapiScpi = ratioCapi + ratioScpiEst;
   const partCapi = totalCapiScpi > 0 ? ratioCapi / totalCapiScpi : 1; // fallback sans impact (drag × 0 = 0)
   const partScpi = 1 - partCapi;
-  const dragFiscalCapi = forfaitTME * tauxISMoyen(forfaitEstime); // ~0.9% sur la base (pas sur la valeur), approximé
+  // Ratio base/valeur du contrat capi à l'objectif (les gains diluent la base)
+  const ratioBaseValeur = projAtObjectif.capiValue > 0
+    ? projAtObjectif.capiBase / projAtObjectif.capiValue
+    : 1;
+  const dragFiscalCapi = forfaitTME * tauxISMoyen(forfaitEstime) * ratioBaseValeur; // drag en % de la valeur
   const dragFiscalScpi = rendement * tauxISMoyen(revenuScpiEstime);  // IS sur les revenus fonciers
   const dragFiscalMoyen = partCapi * dragFiscalCapi + partScpi * dragFiscalScpi;
   const rendementNetDrag = Math.max(0, rendement - dragFiscalMoyen);
