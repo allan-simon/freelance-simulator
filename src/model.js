@@ -382,7 +382,7 @@ export function computeAll(params) {
 
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
 
-      // inflate() : le TJM, salaire, missions, retraite suivent l'inflation → leur nominal croît
+      // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
       const perDebloque = age >= 64;
       const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * 0.7 / 12) : 0;
