@@ -416,30 +416,33 @@ export function computeAll(params) {
   let drawdownAnnuelBrutAvant64 = 0;
   let drawdownAnnuelBrutApres64 = 0;
 
+  // Annuité en taux réel → versements constants en pouvoir d'achat (nominaux croissants avec l'inflation)
+  const tauxReel = Math.max(0.001, rendement - inflation);
+
   if (croquerCapital && rendement > 0) {
     if (ageObjectif >= 64) {
       // Tout est débloqué dès le départ
       drawdownAnnuelBrutApres64 = anneesDrawdown > 0
-        ? poolTotalAvantRetrait * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
+        ? poolTotalAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesDrawdown))
         : 0;
     } else {
       // Phase 1 : avant 64, on consomme le capital hors PER
       if (anneesAvant64 > 0) {
-        drawdownAnnuelBrutAvant64 = poolHorsPerAvantRetrait * rendement / (1 - Math.pow(1 + rendement, -anneesAvant64));
+        drawdownAnnuelBrutAvant64 = poolHorsPerAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesAvant64));
       }
       // Phase 2 : à 64 ans, le PER se débloque et rejoint le pool
       if (anneesApres64 > 0) {
         // Le PER a grossi (contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64)
         let perAt64 = poolPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendement);
-        // Capital hors PER restant (annuité conçue pour drainer à 0)
+        // Capital hors PER restant — simuler les retraits indexés sur l'inflation
         let soldeHorsPer = poolHorsPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) {
-          soldeHorsPer = soldeHorsPer * (1 + rendement) - drawdownAnnuelBrutAvant64;
+          soldeHorsPer = soldeHorsPer * (1 + rendement) - drawdownAnnuelBrutAvant64 * Math.pow(1 + inflation, i);
         }
         soldeHorsPer = Math.max(0, soldeHorsPer);
         const capitalTotal64 = soldeHorsPer + perAt64;
-        drawdownAnnuelBrutApres64 = capitalTotal64 * rendement / (1 - Math.pow(1 + rendement, -anneesApres64));
+        drawdownAnnuelBrutApres64 = capitalTotal64 * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesApres64));
       }
     }
   }
@@ -480,7 +483,12 @@ export function computeAll(params) {
       } else if (croquerCapital) {
         // PER bloqué jusqu'à 64 ans : il grossit mais on ne le ponctione pas
         const perDebloque = age >= 64;
-        const currentDrawdown = perDebloque ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
+        // Annuité indexée sur l'inflation → pouvoir d'achat constant
+        const anneesDepuisPhase = perDebloque
+          ? age - Math.max(ageObjectif, 64)
+          : age - ageObjectif;
+        const baseDrawdown = perDebloque ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
+        const currentDrawdown = baseDrawdown * Math.pow(1 + inflation, anneesDepuisPhase);
 
         // Pool de retrait : hors PER avant 64, tout après 64
         const poolCapi = cumCapi * (1 + rendement);
