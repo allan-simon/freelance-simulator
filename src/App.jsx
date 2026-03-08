@@ -610,10 +610,10 @@ export default function App() {
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            <Slider label="Rendement contrat capi" value={rendementCapi} onChange={setRendementCapi} min={0.02} max={0.10} step={0.005} format="pct" note="Contrat capi lux, FID actions" />
-            <Slider label="Rendement SCPI" value={rendementScpi} onChange={setRendementScpi} min={0.02} max={0.08} step={0.005} format="pct" note="Immobilier, loyers nets de frais" />
-            <Slider label="Rendement PEA" value={rendementPea} onChange={setRendementPea} min={0.02} max={0.12} step={0.005} format="pct" note="ETF actions européennes" />
-            <Slider label="Rendement PER" value={rendementPer} onChange={setRendementPer} min={0.02} max={0.08} step={0.005} format="pct" note="Allocation mixte/défensive" />
+            <Slider label="Rendement contrat capi" value={rendementCapi} onChange={setRendementCapi} min={0.02} max={0.10} step={0.005} format="pct" note="Net de frais assureur — FID actions" />
+            <Slider label="Rendement SCPI" value={rendementScpi} onChange={setRendementScpi} min={0.02} max={0.08} step={0.005} format="pct" note="Net de frais de gestion — loyers + revalo" />
+            <Slider label="Rendement PEA" value={rendementPea} onChange={setRendementPea} min={0.02} max={0.12} step={0.005} format="pct" note="Net de TER et courtage — ETF actions" />
+            <Slider label="Rendement PER" value={rendementPer} onChange={setRendementPer} min={0.02} max={0.08} step={0.005} format="pct" note="Net de frais assureur — PER en ligne" />
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />

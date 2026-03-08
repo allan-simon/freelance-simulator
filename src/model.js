@@ -9,11 +9,12 @@ export const DEFAULTS = {
   salaireBrut: 60000,
   divNetsVoulus: 40000,
   rendement: 0.06, // fallback si un seul rendement est fourni (CLI, URL legacy)
-  rendementCapi: 0.06,  // contrat capi lux, FID actions diversifié
-  rendementScpi: 0.045, // SCPI, rendement total (distribution + revalorisation parts)
+  // Rendements nets de frais de gestion (TER, frais assureur, courtage)
+  rendementCapi: 0.06,  // contrat capi lux, FID actions diversifié — net de frais assureur (~0,5%)
+  rendementScpi: 0.045, // SCPI, rendement total (distribution + revalorisation parts) — net de frais de gestion
   partDistribScpi: 0.89, // ~4% distribution sur 4,5% total → 89% (seule la distribution est imposable à l'IS)
-  rendementPea:  0.07,  // PEA, ETF actions européennes
-  rendementPer:  0.05,  // PER, allocation mixte/défensive
+  rendementPea:  0.07,  // PEA, ETF actions — net de TER (~0,2%) et frais courtier
+  rendementPer:  0.05,  // PER, allocation mixte/défensive — net de frais assureur (~0,5%, PER en ligne)
   ageObjectif: 50,
   joursLeverLePied: 50,
   croquerCapital: false,
