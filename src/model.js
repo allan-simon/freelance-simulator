@@ -184,7 +184,7 @@ export function computeConstraints({
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25 }) {
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendement, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25 }) {
   let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0;
   const forfaitTME = 1.05 * tme;
   for (let y = 1; y <= annees; y++) {
@@ -197,7 +197,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, pro
     tp = tp * (1 + rendement) + peaPerso * infY;
     tpe = tpe * (1 + rendement) + per * infY;
   }
-  return { total: tc + ts + tp + tpe + provisionRisque, capiValue: tc, capiBase: tcBase };
+  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase };
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
@@ -426,9 +426,9 @@ export function computeAll(params) {
   // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
   const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
   const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime) };
-  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation, ...projArgs });
+  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendement, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
-  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque, rendement, annees, inflation, ...projArgs }).total;
+  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, rendement, annees, inflation, ...projArgs }).total;
 
   const anneesDrawdown = ageFin - ageObjectif;
   const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
@@ -440,8 +440,8 @@ export function computeAll(params) {
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
   // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
-  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque: 0, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
-  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, provisionRisque: 0, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
+  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, rendement, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
 
   let drawdownAnnuelBrutAvant64 = 0;
@@ -714,7 +714,6 @@ export function computeAll(params) {
       scpi: reste * ratioScpi,
       peaPerso,
       per,
-      provisionRisque: nn / 12 * 6,
       rendement,
       annees,
       inflation,
