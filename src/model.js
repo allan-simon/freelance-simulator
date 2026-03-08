@@ -341,6 +341,10 @@ export function computeAll(params) {
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
+  // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
+  const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
+  const tauxISEffectif = seuilISRestant > 0 ? tauxISReduit : tauxISNormal; // simplification : le forfait annuel est petit vs le seuil
+
   // Fiscalité nette par enveloppe
   // SCPI détenues par la SASU : revenus fonciers taxés à l'IS (pas au barème IR du dirigeant),
   // puis flat tax sur la distribution au dirigeant. Même logique que le contrat capi.
@@ -351,9 +355,6 @@ export function computeAll(params) {
   // - Pendant la détention : IS annuel sur forfait (versements nets × 105% × TME)
   //   → déduit de cumCapi dans la boucle, tracké dans cumForfaitsIS
   // - Au rachat : régularisation IS sur max(0, gains réels - forfaits cumulés), puis flat tax
-  // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
-  const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
-  const tauxISEffectif = seuilISRestant > 0 ? tauxISReduit : tauxISNormal; // simplification : le forfait annuel est petit vs le seuil
   const forfaitTME = 1.05 * tme; // taux forfaitaire annuel appliqué aux versements nets
   const computeFiscNetteCapi = (value, basis, cumForfaits) => {
     if (value <= 0) return 1 - tauxFlatTax;
