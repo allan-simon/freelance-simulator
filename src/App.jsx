@@ -571,15 +571,16 @@ export default function App() {
         </Card>
 
         {/* SOLVEUR RATIO */}
-        <Card title="Solveur — optimisation du ratio de distribution" subtitle="Testez chaque ratio : combien pour vivre maintenant vs combien pour capitaliser" accent="#6b46c1">
+        <Card title="Solveur — dividendes vs capitalisation" subtitle="Et si vous changiez le montant de dividendes ? Impact sur votre net et votre patrimoine." accent="#6b46c1">
           <div style={{ fontSize: 12, color: '#718096', marginBottom: 12 }}>
-            Chaque ligne = un ratio de distribution différent. La ligne surlignée = votre choix actuel.
+            Chaque ligne simule un montant de dividendes nets différent. La ligne surlignée correspond à votre choix actuel ({fmt(r.divNets)}/an).
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
               <thead>
                 <tr style={{ background: '#1a365d', color: '#fff' }}>
                   <th style={{ padding: '8px 6px', textAlign: 'center' }}>Ratio</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Div. nets /an</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Net /mois</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Capital {ageObjectif} ans</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Revenu passif /mois</th>
@@ -590,6 +591,7 @@ export default function App() {
                   <tr key={i} style={{ background: s.isSelected ? '#f0fff4' : i % 2 === 0 ? '#fff' : '#f7fafc',
                     fontWeight: s.isSelected ? 700 : 400, borderLeft: s.isSelected ? '3px solid #38a169' : '3px solid transparent' }}>
                     <td style={{ padding: '6px', textAlign: 'center' }}>{fmtPct(s.ratio)}</td>
+                    <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.divNets)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.netMensuel)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmtK(s.capital50)}</td>
                     <td style={{ padding: '6px', textAlign: 'right' }}>{fmt(s.revenuPassif)}</td>
