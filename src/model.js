@@ -14,6 +14,7 @@ export const DEFAULTS = {
   croquerCapital: false,
   ageFin: 80,
   per: 5000,
+  tauxConversionPer: 0.035,  // taux de conversion rente viagère assureur à 64 ans (typiquement 3-4%)
   salaireBrutCDI: 45000,
   ratioTreso: 0.15,
   ratioCapi: 0.65,
@@ -266,7 +267,7 @@ export function computeAll(params) {
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     fiscNettePea = DEFAULTS.fiscNettePea,
     frais, rendement, ageActuel, ageObjectif,
-    croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
+    croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035,
     ratioTreso = 0.15, ratioCapi = 0.65,
     salaireBrutCDI = 45000,
     inflation = 0.02
@@ -419,6 +420,13 @@ export function computeAll(params) {
   // Annuité en taux réel → versements constants en pouvoir d'achat (nominaux croissants avec l'inflation)
   const tauxReel = Math.max(0.001, rendement - inflation);
 
+  // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
+  // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
+  //   Pas de contrainte légale de durée max ni de montant min (modalités contractuelles variables).
+  //   Approximation fiscale : le modèle applique la fiscalité pondérée du pool (flat tax),
+  //   alors qu'en réalité les versements PER déduits sont imposés au barème IR (pas PFU)
+  //   et seuls les gains sont au PFU 30%. L'écart est limité si la TMI ≈ 30%.
+  // - croquer = false → sortie en rente viagère : capital converti par l'assureur (tauxConversionPer)
   if (croquerCapital && rendement > 0) {
     if (ageObjectif >= 64) {
       // Tout est débloqué dès le départ
@@ -430,7 +438,7 @@ export function computeAll(params) {
       if (anneesAvant64 > 0) {
         drawdownAnnuelBrutAvant64 = poolHorsPerAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesAvant64));
       }
-      // Phase 2 : à 64 ans, le PER se débloque et rejoint le pool
+      // Phase 2 : à 64 ans, sortie PER en capital fractionné (art. L224-1 CMF) → rejoint le pool
       if (anneesApres64 > 0) {
         // Le PER a grossi (contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64)
         let perAt64 = poolPerAvantRetrait;
@@ -453,6 +461,8 @@ export function computeAll(params) {
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
   const deflate = (nominal, years) => inflation > 0 ? nominal / Math.pow(1 + inflation, years) : nominal;
+
+  let perRenteAnnuelleBrute = 0; // rente viagère fixée à 64 ans, nominale constante
 
   for (let y = 0; y <= ageFin - ageActuel; y++) {
     const age = ageActuel + y;
@@ -538,6 +548,12 @@ export function computeAll(params) {
           cumPea = cumPea * (1 + rendement);
           cumPer = cumPer * (1 + rendement);
         }
+        // croquer = false → sortie PER en rente viagère à 64 ans (art. L224-1 CMF)
+        // Le capital est transféré à l'assureur qui verse une rente nominale fixe à vie
+        if (age === 64 && perRenteAnnuelleBrute === 0 && cumPer > 0) {
+          perRenteAnnuelleBrute = cumPer * tauxConversionPer;
+          cumPer = 0; // capital parti chez l'assureur
+        }
       }
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
@@ -561,7 +577,8 @@ export function computeAll(params) {
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * tauxRetrait * fiscNettePerEff / 12) : 0;
+      // Rente PER : montant nominal fixe (conversion viagère à 64 ans)
+      const perRenteMois = (!croquerCapital && perRenteAnnuelleBrute > 0) ? Math.round(perRenteAnnuelleBrute * fiscNettePerEff / 12) : 0;
       // Revenus indexés sur l'inflation → nominal croît, réel constant
       const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
       const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
