@@ -42,7 +42,7 @@ export const DEFAULTS = {
   // fiscNetteCapi : calculée dynamiquement (IS sur gains + flat tax sur distribution)
   // fiscNetteScpi : calculée dynamiquement (IS + flat tax — SCPI détenues par la SASU)
   // fiscNettePer  : calculée dynamiquement (TMI retraite × 90% + PS pension 9,1%)
-  fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6% — seule constante (indépendante de la TMI)
+  psPea: 0.186, // PEA > 5 ans : PS seules 18,6% sur les gains (CSG 9,2% + CRDS 0,5% + PS 7,5% + contrib. add. 1,4%)
   // PS sur pensions de retraite (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
   psPension: 0.091,      // CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein, non exonéré)
   plafondAbattementPension: 4399, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, 2025)
@@ -249,7 +249,7 @@ export function computeConstraints({
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
 export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89 }) {
-  let tc = 0, tcBase = 0, ts = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
+  let tc = 0, tcBase = 0, ts = 0, tsBase = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
   for (let y = 1; y <= annees; y++) {
@@ -259,6 +259,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
     ts = ts * (1 + rendementScpi) + scpi * infY;
+    tsBase += scpi * infY;
     // IS annuel sur les distributions SCPI (loyers)
     if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
     const peaV = Math.min(peaPerso * infY, Math.max(0, 150000 - tpBase));
@@ -267,7 +268,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     tpe = tpe * (1 + rendementPer) + per * infY;
     tpeBase += per * infY;
   }
-  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, peaValue: tp, perValue: tpe, perBase: tpeBase };
+  return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, scpiBase: tsBase, peaValue: tp, peaBase: tpBase, perValue: tpe, perBase: tpeBase };
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
@@ -361,7 +362,7 @@ export function computeAll(params) {
     tjm, jours, salaireBrut, divNetsVoulus,
     seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
-    fiscNettePea = DEFAULTS.fiscNettePea,
+    psPea = DEFAULTS.psPea,
     psPension = DEFAULTS.psPension,
     plafondAbattementPension = DEFAULTS.plafondAbattementPension,
     plafondAbattementSalaire = DEFAULTS.plafondAbattementSalaire,
@@ -471,6 +472,27 @@ export function computeAll(params) {
     return (basis + gainNetIS * (1 - tauxFlatTax)) / value;
   };
 
+  // SCPI détenues par la SASU : à la cession, IS sur la plus-value (revalo), puis flat tax
+  // Les distributions (loyers) ont déjà été taxées annuellement (IS dans la boucle).
+  // La plus-value = value - basis (basis = versements nets de frais d'entrée).
+  const computeFiscNetteScpi = (value, basis) => {
+    if (value <= 0) return fiscNetteScpiEff; // fallback sur estimation statique
+    const b = Math.min(basis || 0, value);
+    const pvCession = Math.max(0, value - b);
+    // IS sur la PV de cession (produit exceptionnel de la société)
+    const isPV = Math.min(pvCession, seuilISRestant) * tauxISReduit + Math.max(0, pvCession - seuilISRestant) * tauxISNormal;
+    // Flat tax sur le tout (retour de capital = remboursement d'apport, pas imposable en flat tax)
+    return (b + (pvCession - isPV) * (1 - tauxFlatTax)) / value;
+  };
+
+  // PEA > 5 ans : PS (18,6%) sur les gains uniquement, retour de capital en franchise
+  const computeFiscNettePea = (value, basis) => {
+    if (value <= 0) return 1;
+    const b = Math.min(basis || 0, value);
+    const gains = value - b;
+    return (b + gains * (1 - psPea)) / value;
+  };
+
   // Fiscalité PER sortie en capital (CGI art. 154 bis, 163 quatervicies, 200 A) :
   // - Versements déduits → barème IR (TMI retraite), pas de PS (c'est du capital, pas une pension)
   // - Gains → PFU (tauxFlatTax)
@@ -482,15 +504,17 @@ export function computeAll(params) {
   };
 
   // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
-  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cPea, cPer, inclurePer = true, cForfaits = 0, cPerBase = 0) => {
+  const fiscalitePonderee = (cCapi, cCapiBase, cScpi, cScpiBase, cPea, cPeaBase, cPer, inclurePer = true, cForfaits = 0, cPerBase = 0) => {
     const c = cCapi || 0, s = cScpi || 0, p = cPea || 0, pe = (inclurePer && cPer) ? cPer : 0;
     const total = c + s + p + pe;
     if (total <= 0) return computeFiscNetteCapi(0, 0, 0); // fallback
     const fCapi = computeFiscNetteCapi(c, cCapiBase || 0, cForfaits);
+    const fScpi = computeFiscNetteScpi(s, cScpiBase || 0);
+    const fPea = computeFiscNettePea(p, cPeaBase || 0);
     // PER : sortie capital (croquer) → versements au barème IR, gains au PFU
     //        sortie rente          → fiscNettePerEff (TMI × 90% + PS)
     const fPer = croquerCapital ? computeFiscNettePerCapital(pe, cPerBase) : fiscNettePerEff;
-    return (c * fCapi + s * fiscNetteScpiEff + p * fiscNettePea + pe * fPer) / total;
+    return (c * fCapi + s * fScpi + p * fPea + pe * fPer) / total;
   };
 
   // --- Capitalisation ---
@@ -536,7 +560,7 @@ export function computeAll(params) {
 
   const projection = [];
   const PLAFOND_PEA = 150000; // plafond versements PEA (CMF art. L221-30)
-  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPeaBase = 0, cumPer = 0, cumPerBase = 0, cumForfaitsIS = 0;
+  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumScpiBase = 0, cumPea = 0, cumPeaBase = 0, cumPer = 0, cumPerBase = 0, cumForfaitsIS = 0;
 
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
@@ -673,7 +697,7 @@ export function computeAll(params) {
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
   // Estimation headline (encours à ageObjectif) — la boucle recalcule fiscPondRetrait chaque année
   // avec les encours réels (la composition du portefeuille évolue pendant le drawdown)
-  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpiNet, peaPerso, per, true, 0, projAtObjectif.perBase);
+  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, projAtObjectif.scpiValue, projAtObjectif.scpiBase, projAtObjectif.peaValue, projAtObjectif.peaBase, per, true, 0, projAtObjectif.perBase);
   const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
@@ -707,6 +731,7 @@ export function computeAll(params) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
         cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
+        cumScpiBase += scpiNet * infY;
         // PEA plafonné à 150k€ de versements (CMF art. L221-30).
         // L'excédent reste dans le net net du foyer (pas de redirection vers une autre enveloppe).
         const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
@@ -742,8 +767,12 @@ export function computeAll(params) {
           const prevCapi = poolCapi;
           cumCapi = poolCapi - actualWithdrawal * ratio_c;
           cumCapiBase = prevCapi > 0 ? cumCapiBase * (cumCapi / prevCapi) : 0;  // base réduite au prorata
+          const prevScpi = poolScpi;
           cumScpi = poolScpi - actualWithdrawal * ratio_s;
+          cumScpiBase = prevScpi > 0 ? cumScpiBase * (cumScpi / prevScpi) : 0;
+          const prevPea = poolPea;
           cumPea = poolPea - actualWithdrawal * ratio_p;
+          cumPeaBase = prevPea > 0 ? cumPeaBase * (cumPea / prevPea) : 0;
           if (perDebloque) {
             const ratio_pe = poolPer / totalPool;
             const prevPer = poolPer;
@@ -766,7 +795,7 @@ export function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendementCapi);
           cumScpi = cumScpi * (1 + rendementScpi);
-          const peaContribBrut = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY;
+          const peaContribBrut = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY; // estimation (IS exact calculé plus bas)
           const peaContrib = Math.min(peaContribBrut, Math.max(0, PLAFOND_PEA - cumPeaBase));
           cumPea = cumPea * (1 + rendementPea) + peaContrib;
           cumPeaBase += peaContrib;
@@ -832,7 +861,7 @@ export function computeAll(params) {
       const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
       const totalAvecPer = totalHorsPer + cumPer;
 
-      const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, false, cumForfaitsIS);
+      const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumScpiBase, cumPea, cumPeaBase, cumPer, false, cumForfaitsIS);
       // SWR prudent : rendement réel net du drag IS, moins 0.5 point de marge
       // pour absorber le sequence-of-returns risk et la volatilité réelle.
       // Avec les défauts (5% brut, 2% inflation, ~0.7% drag IS) → SWR ≈ 1.8% au lieu de 2.3%.
@@ -841,7 +870,7 @@ export function computeAll(params) {
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
       const perDebloque = age >= 64;
-      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, perDebloque, cumForfaitsIS, cumPerBase);
+      const fiscPondRetrait = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumScpiBase, cumPea, cumPeaBase, cumPer, perDebloque, cumForfaitsIS, cumPerBase);
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(actualWithdrawal * fiscPondRetrait / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
@@ -928,7 +957,7 @@ export function computeAll(params) {
       ...projArgs,
     });
     const capitalFin = projScenario.total;
-    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi * (1 - fraisEntreeScpi), peaPerso, per, true, 0, projScenario.perBase);
+    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, projScenario.scpiValue, projScenario.scpiBase, projScenario.peaValue, projScenario.peaBase, per, true, 0, projScenario.perBase);
     const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - margeSecurite);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
