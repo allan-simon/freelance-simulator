@@ -311,12 +311,50 @@ export function computeAll(params) {
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
 
   // First pass: capital at ageObjectif for drawdown
+  // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
+  // On calcule le drawdown en excluant le PER avant 64 ans
   const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees, inflation });
+  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, tresoSecurite, rendement, annees, inflation });
 
   const anneesDrawdown = ageFin - ageObjectif;
-  const drawdownAnnuelBrut = croquerCapital && anneesDrawdown > 0 && rendement > 0
-    ? capitalAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
-    : 0;
+  const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
+  const anneesApres64 = Math.max(0, ageFin - Math.max(ageObjectif, 64));
+
+  // Avant 64 : on ne consomme que le capital hors PER
+  // Après 64 : on consomme tout (hors PER résiduel + PER débloqué)
+  let drawdownAnnuelBrutAvant64 = 0;
+  let drawdownAnnuelBrutApres64 = 0;
+  if (croquerCapital && rendement > 0) {
+    if (ageObjectif >= 64) {
+      // Tout est débloqué dès le départ
+      drawdownAnnuelBrutApres64 = anneesDrawdown > 0
+        ? capitalAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesDrawdown))
+        : 0;
+    } else {
+      // Phase 1 : avant 64, on ne touche pas au PER
+      if (anneesAvant64 > 0) {
+        drawdownAnnuelBrutAvant64 = capitalHorsPerAtObjectif * rendement / (1 - Math.pow(1 + rendement, -anneesAvant64));
+      }
+      // Phase 2 : à 64 ans, le PER se débloque. Capital restant hors PER + PER capitalisé
+      if (anneesApres64 > 0) {
+        // Le PER a grossi avec contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64
+        let perAt64 = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, tresoSecurite: 0, rendement, annees, inflation });
+        // Capitalisation sans contribution de ageObjectif à 64
+        for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendement);
+        // Capital hors PER restant après drawdown avant 64 (on recalcule à 64)
+        // Simplification : on projette le solde hors PER qui reste à 64
+        let soldeHorsPer = capitalHorsPerAtObjectif;
+        for (let i = 0; i < anneesAvant64; i++) {
+          soldeHorsPer = soldeHorsPer * (1 + rendement) - drawdownAnnuelBrutAvant64;
+        }
+        soldeHorsPer = Math.max(0, soldeHorsPer);
+        const capitalTotal64 = soldeHorsPer + perAt64;
+        drawdownAnnuelBrutApres64 = capitalTotal64 * rendement / (1 - Math.pow(1 + rendement, -anneesApres64));
+      }
+    }
+  }
+  // Pour la compatibilité : drawdownAnnuelBrut est celui de la première phase
+  const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
   const drawdownMensuelNet = drawdownAnnuelBrut * 0.7 / 12;
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
@@ -347,19 +385,39 @@ export function computeAll(params) {
         cumPea = cumPea * (1 + rendement) + peaPerso * infY;
         cumPer = cumPer * (1 + rendement) + per * infY;
       } else if (croquerCapital) {
-        const totalBefore = cumCapi + cumScpi + cumPea + cumPer;
-        const growth = totalBefore * rendement;
-        const withdrawal = Math.min(drawdownAnnuelBrut, totalBefore + growth);
-        const totalWithGrowth = totalBefore + growth;
-        if (totalWithGrowth > 0) {
-          const ratio_c = (cumCapi * (1 + rendement)) / totalWithGrowth;
-          const ratio_s = (cumScpi * (1 + rendement)) / totalWithGrowth;
-          const ratio_p = (cumPea * (1 + rendement)) / totalWithGrowth;
-          const ratio_pe = (cumPer * (1 + rendement)) / totalWithGrowth;
-          cumCapi = cumCapi * (1 + rendement) - withdrawal * ratio_c;
-          cumScpi = cumScpi * (1 + rendement) - withdrawal * ratio_s;
-          cumPea = cumPea * (1 + rendement) - withdrawal * ratio_p;
-          cumPer = cumPer * (1 + rendement) - withdrawal * ratio_pe;
+        // PER bloqué jusqu'à 64 ans : il grossit mais on ne le ponctione pas
+        const perDebloque = age >= 64;
+        const currentDrawdown = perDebloque ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
+
+        // Pool de retrait : hors PER avant 64, tout après 64
+        const poolCapi = cumCapi * (1 + rendement);
+        const poolScpi = cumScpi * (1 + rendement);
+        const poolPea = cumPea * (1 + rendement);
+        const poolPer = cumPer * (1 + rendement);
+
+        const totalPool = perDebloque
+          ? poolCapi + poolScpi + poolPea + poolPer
+          : poolCapi + poolScpi + poolPea;
+        const withdrawal = Math.min(currentDrawdown, totalPool);
+
+        if (totalPool > 0) {
+          const ratio_c = poolCapi / totalPool;
+          const ratio_s = poolScpi / totalPool;
+          const ratio_p = poolPea / totalPool;
+          cumCapi = poolCapi - withdrawal * ratio_c;
+          cumScpi = poolScpi - withdrawal * ratio_s;
+          cumPea = poolPea - withdrawal * ratio_p;
+          if (perDebloque) {
+            const ratio_pe = poolPer / totalPool;
+            cumPer = poolPer - withdrawal * ratio_pe;
+          } else {
+            cumPer = poolPer; // PER grossit mais pas ponctionné
+          }
+        } else {
+          cumCapi = poolCapi;
+          cumScpi = poolScpi;
+          cumPea = poolPea;
+          cumPer = poolPer;
         }
         cumCapi = Math.max(0, cumCapi);
         cumScpi = Math.max(0, cumScpi);
@@ -384,7 +442,8 @@ export function computeAll(params) {
 
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * 0.7 / 12;
 
-      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
+      const currentDrawdownBrut = (age >= 64) ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
+      const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(currentDrawdownBrut * 0.7 / 12) : 0;
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
@@ -491,7 +550,8 @@ export function computeAll(params) {
     projection, scenariosRatio, annees,
     cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
-    capitalAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
+    capitalAtObjectif, capitalHorsPerAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
+    drawdownAnnuelBrutAvant64, drawdownAnnuelBrutApres64,
     joursMissionsPonctuelles, inflation
   };
 }

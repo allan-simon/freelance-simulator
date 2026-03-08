@@ -720,10 +720,14 @@ export default function App() {
               return croquerCapital ? (
                 <>
                   <strong>Mode "je croque tout" :</strong> Vous retirez {fmt(r.drawdownMensuelNet)}/mois net de votre capital
-                  à partir de {ageObjectif} ans (+ missions + retraite). Le capital atteint 0 € à {ageFin} ans.
+                  à partir de {ageObjectif} ans (+ missions + retraite).
+                  {ageObjectif < 64 && r.drawdownAnnuelBrutApres64 > 0 && (
+                    <> Le PER est bloqué jusqu'à 64 ans — à 64 ans le retrait passe à {fmt(r.drawdownAnnuelBrutApres64 * 0.7 / 12)}/mois net.</>
+                  )}
+                  {' '}Le capital atteint 0 € à {ageFin} ans.
                   Après {ageFin} ans il ne reste que la retraite obligatoire ({fmt(r.retraiteTotaleMois)}/mois).
-                  <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * 0.04 * 0.7 / 12)) * 100 - 100)}% de revenu en plus
-                  qu'en rente perpétuelle, mais rien à transmettre.
+                  <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalHorsPerAtObjectif * 0.04 * 0.7 / 12)) * 100 - 100)}% de revenu en plus
+                  qu'en rente perpétuelle (hors PER), mais rien à transmettre.
                 </>
               ) : (
                 <>
