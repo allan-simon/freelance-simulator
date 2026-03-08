@@ -1,0 +1,11 @@
+{
+  "name": "freelance-simulator",
+  "version": "1.0.0",
+  "description": "Simulateur financier freelance SASU — optimisation rémunération, capitalisation, projection long terme. Inclut un skill conseiller et un moteur de calcul CLI.",
+  "author": {
+    "name": "asimon"
+  },
+  "repository": "https://github.com/asimon/freelance-simulator",
+  "license": "MIT",
+  "keywords": ["freelance", "sasu", "france", "simulation", "fiscalité", "dividendes", "capitalisation"]
+}
