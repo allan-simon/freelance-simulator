@@ -9,7 +9,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 const REGL = {
   // Charges sociales président SASU assimilé salarié [1][3]
   TAUX_PATRONALES: 0.42,
-  TAUX_SALARIALES: 0.28,
 
   // Impôt sur les sociétés — LDF 2026 [2]
   SEUIL_IS_REDUIT: 42500,
@@ -70,6 +69,24 @@ const REGL = {
   CDI_EPARGNE_MOIS: 500,
 };
 
+// Cotisations salariales détaillées — identiques SASU président et CDI cadre
+const PASS = 48060;
+
+function computeCotisationsSalariales(salaireBrut) {
+  // Taux sur totalité du brut
+  const totalite = 0.0040 + 0.0014 + 0.00024; // vieillesse dépl + CET + APEC
+  // Taux sur T1 (≤ PASS)
+  const t1Taux = 0.0690 + 0.0315 + 0.0086; // vieillesse pl + AGIRC-ARRCO + CEG
+  // Taux sur T2 (> PASS)
+  const t2Taux = 0.0864 + 0.0108; // AGIRC-ARRCO T2 + CEG T2
+  // CSG/CRDS sur 98,25% du brut
+  const csgCrds = 0.0970 * 0.9825;
+
+  const t1 = Math.min(salaireBrut, PASS);
+  const t2 = Math.max(0, salaireBrut - PASS);
+  return salaireBrut * totalite + t1 * t1Taux + t2 * t2Taux + salaireBrut * csgCrds;
+}
+
 // ============================================================
 // MOTEUR DE CALCUL — Toutes les formules sont ici
 // ============================================================
@@ -77,7 +94,7 @@ const REGL = {
 function computeAll(params) {
   const {
     tjm, jours, salaireBrut, divNetsVoulus,
-    tauxPatronales, tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
+    tauxPatronales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50
@@ -92,7 +109,7 @@ function computeAll(params) {
   // --- Charges salaire ---
   const chargesPatronales = salaireBrut * tauxPatronales;
   const superbrut = salaireBrut + chargesPatronales;
-  const salaireNet = salaireBrut * (1 - tauxSalariales);
+  const salaireNet = salaireBrut - computeCotisationsSalariales(salaireBrut);
 
   // --- Résultat ---
   const totalCharges = superbrut + totalFrais;
@@ -439,7 +456,7 @@ export default function App() {
 
   const params = {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-    tauxPatronales: REGL.TAUX_PATRONALES, tauxSalariales: REGL.TAUX_SALARIALES,
+    tauxPatronales: REGL.TAUX_PATRONALES,
     seuilIS: REGL.SEUIL_IS_REDUIT, tauxISReduit: REGL.TAUX_IS_REDUIT, tauxISNormal: REGL.TAUX_IS_NORMAL,
     tauxFlatTax: REGL.TAUX_FLAT_TAX, abattementIR: REGL.ABATTEMENT_IR,
     revenuConjoint: 16800, partsFiscales: 2.5,

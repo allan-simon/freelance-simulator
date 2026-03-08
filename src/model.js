@@ -28,7 +28,6 @@ export const DEFAULTS = {
   fiscNetteScpi: 0.53,   // SCPI usufruit : revenus fonciers TMI 30% + PS 17,2% ≈ 47% (PS 18,6% ne s'applique PAS aux rev. fonciers)
   fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6%
   fiscNettePer:  0.55,   // PER sortie rente : IR TMI ~30% + PS 17,2% (approx)
-  tauxSalariales: 0.28,
   seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
@@ -85,6 +84,41 @@ export function computeChargesPatronales(salaireBrut) {
   const t1 = Math.min(salaireBrut, PASS);
   const t2 = Math.max(0, salaireBrut - PASS);
   return salaireBrut * SUM_TOTALITE + t1 * SUM_T1 + t2 * SUM_T2;
+}
+
+// Cotisations salariales détaillées — identiques SASU président et CDI cadre
+// (la différence SASU/CDI est uniquement sur les cotisations patronales)
+const TAUX_SAL_TOTALITE = {
+  vieillesseDepl: 0.0040,   // vieillesse déplafonnée
+  cet: 0.0014,              // contribution d'équilibre technique
+  apec: 0.00024,            // APEC cadre
+};
+
+const TAUX_SAL_T1 = {
+  vieillessePl: 0.0690,     // vieillesse plafonnée
+  agircArrco: 0.0315,       // retraite complémentaire T1
+  ceg: 0.0086,              // contribution d'équilibre général T1
+};
+
+const TAUX_SAL_T2 = {
+  agircArrco: 0.0864,       // retraite complémentaire T2
+  ceg: 0.0108,              // contribution d'équilibre général T2
+};
+
+// CSG/CRDS sur 98,25% du brut
+const TAUX_CSG_CRDS = 0.0970; // 9,20% CSG + 0,50% CRDS
+const ASSIETTE_CSG = 0.9825;
+
+const SUM_SAL_TOTALITE = Object.values(TAUX_SAL_TOTALITE).reduce((a, b) => a + b, 0);
+const SUM_SAL_T1 = Object.values(TAUX_SAL_T1).reduce((a, b) => a + b, 0);
+const SUM_SAL_T2 = Object.values(TAUX_SAL_T2).reduce((a, b) => a + b, 0);
+
+// Calcul exact des cotisations salariales par tranche
+export function computeCotisationsSalariales(salaireBrut) {
+  const t1 = Math.min(salaireBrut, PASS);
+  const t2 = Math.max(0, salaireBrut - PASS);
+  return salaireBrut * SUM_SAL_TOTALITE + t1 * SUM_SAL_T1 + t2 * SUM_SAL_T2
+       + salaireBrut * ASSIETTE_CSG * TAUX_CSG_CRDS;
 }
 
 export const RANGES = {
@@ -218,7 +252,7 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
 export function computeAll(params) {
   const {
     tjm, jours, salaireBrut, divNetsVoulus,
-    tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
+    seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     fiscNetteCapi = DEFAULTS.fiscNetteCapi,
     fiscNetteScpi = DEFAULTS.fiscNetteScpi,
@@ -248,7 +282,8 @@ export function computeAll(params) {
   // --- Charges salaire (calcul exact par tranche) ---
   const chargesPatronales = computeChargesPatronales(salaireBrut);
   const superbrut = salaireBrut + chargesPatronales;
-  const salaireNet = salaireBrut * (1 - tauxSalariales);
+  const cotisationsSalariales = computeCotisationsSalariales(salaireBrut);
+  const salaireNet = salaireBrut - cotisationsSalariales;
 
   // --- Résultat ---
   const totalCharges = superbrut + totalFrais;
@@ -569,9 +604,8 @@ export function computeAll(params) {
     };
   });
 
-  // CDI comparison — dérivé du salaireBrutCDI paramétrable
-  const TAUX_SALARIALES_CDI = 0.22; // charges salariales typiques CDI cadre privé
-  const cdiNetAvantIR = salaireBrutCDI * (1 - TAUX_SALARIALES_CDI);
+  // CDI comparison — mêmes cotisations salariales que SASU (différence = patronales uniquement)
+  const cdiNetAvantIR = salaireBrutCDI - computeCotisationsSalariales(salaireBrutCDI);
   const cdiImposable = cdiNetAvantIR * (1 - abattementIR);
   const cdiQF = (cdiImposable + revenuConjoint * (1 - abattementIR)) / partsFiscales;
   let cdiIRParPart = 0;

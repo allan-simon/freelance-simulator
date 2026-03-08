@@ -69,21 +69,39 @@ Taux réduit de 15% jusqu'à **42 500 €** de résultat (PME éligibles). Taux 
 
 **Impact** : sur 158k€ de résultat, IS = 42 500 × 15% + 115 500 × 25% = 35 250 € (taux effectif ~22,3%).
 
-## [3] Cotisations salariales ~28%
+## [3] Cotisations salariales ~21% (calcul par tranche)
 
-Part salariale : assurance maladie, vieillesse de base, AGIRC-ARRCO, CSG/CRDS. Environ 28% du salaire brut.
+Part salariale : vieillesse de base, AGIRC-ARRCO, CEG, CET, APEC, CSG/CRDS. Les cotisations salariales sont **identiques** pour un président SASU et un cadre CDI (la différence SASU/CDI est uniquement sur les cotisations patronales).
+
+| Cotisation | Assiette | Taux salarial |
+|---|---|---|
+| Vieillesse plafonnée | Plafond PASS | 6,90% |
+| Vieillesse déplafonnée | Totalité | 0,40% |
+| AGIRC-ARRCO T1 | Plafond PASS | 3,15% |
+| AGIRC-ARRCO T2 | Au-delà du PASS | 8,64% |
+| CEG T1 | Plafond PASS | 0,86% |
+| CEG T2 | Au-delà du PASS | 1,08% |
+| CET | Totalité | 0,14% |
+| APEC | Totalité | 0,024% |
+| CSG + CRDS | 98,25% du brut | 9,70% |
+
+Taux effectifs calculés par le simulateur :
+- 30k€ brut → 21,0% → net 23 699 €
+- 48k€ brut (PASS) → 21,0% → net 37 965 €
+- 60k€ brut → 20,8% → net 47 540 €
+- 80k€ brut → 20,5% → net 63 577 €
 
 **Sources primaires :**
-- [CSS art. L241-2](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033712064) — cotisation maladie salariale
 - [CSS art. L241-3](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006742093) — cotisation vieillesse salariale
 - [CSS art. L136-1-1](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036393351) — CSG sur revenus d'activité (9,2%)
 - [Ord. 96-50 art. 14](https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000006268513) — CRDS (0,5%)
+- [CSS art. L136-2](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036393283) — assiette CSG (98,25% du brut)
 
 **Sources secondaires :**
 - [Dougs — Charges sociales SASU](https://www.dougs.fr/blog/charges-sociales-sasu/)
 - [Service Public — Cotisations sociales](https://entreprendre.service-public.gouv.fr/vosdroits/F36240)
 
-**Impact** : salaire net = salaire brut × 0,72.
+**Impact** : salaire net ≈ salaire brut × 0,79 (sous PASS). Le simulateur calcule le taux exact par tranche.
 
 ## [4] Flat tax 31,4% (PFU) — LFSS 2026
 

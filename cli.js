@@ -62,7 +62,6 @@ function buildParams() {
   return {
     params: {
       tjm, jours, salaireBrut: c.salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-      tauxPatronales: DEFAULTS.tauxPatronales, tauxSalariales: DEFAULTS.tauxSalariales,
       seuilIS: DEFAULTS.seuilIS, tauxISReduit: DEFAULTS.tauxISReduit, tauxISNormal: DEFAULTS.tauxISNormal,
       tauxFlatTax: DEFAULTS.tauxFlatTax, abattementIR: DEFAULTS.abattementIR,
       revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales: DEFAULTS.partsFiscales,
