@@ -246,7 +246,7 @@ export function computeConstraints({
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
 export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89 }) {
-  let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0, tpeBase = 0;
+  let tc = 0, tcBase = 0, ts = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
   for (let y = 1; y <= annees; y++) {
@@ -258,7 +258,9 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     ts = ts * (1 + rendementScpi) + scpi * infY;
     // IS annuel sur les distributions SCPI (loyers)
     if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
-    tp = tp * (1 + rendementPea) + peaPerso * infY;
+    const peaV = Math.min(peaPerso * infY, Math.max(0, 150000 - tpBase));
+    tp = tp * (1 + rendementPea) + peaV;
+    tpBase += peaV;
     tpe = tpe * (1 + rendementPer) + per * infY;
     tpeBase += per * infY;
   }
@@ -530,7 +532,8 @@ export function computeAll(params) {
   const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
 
   const projection = [];
-  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPer = 0, cumPerBase = 0, cumForfaitsIS = 0;
+  const PLAFOND_PEA = 150000; // plafond versements PEA (CMF art. L221-30)
+  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumPea = 0, cumPeaBase = 0, cumPer = 0, cumPerBase = 0, cumForfaitsIS = 0;
 
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
@@ -701,7 +704,9 @@ export function computeAll(params) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
         cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
-        cumPea = cumPea * (1 + rendementPea) + peaPerso * infY;
+        const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
+        cumPea = cumPea * (1 + rendementPea) + peaVersement1;
+        cumPeaBase += peaVersement1;
         cumPer = cumPer * (1 + rendementPer) + per * infY;
         cumPerBase += per * infY;
       } else if (croquerCapital) {
@@ -756,8 +761,10 @@ export function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendementCapi);
           cumScpi = cumScpi * (1 + rendementScpi);
-          const peaContrib = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY; // clampé au revenu missions disponible
+          const peaContribBrut = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY;
+          const peaContrib = Math.min(peaContribBrut, Math.max(0, PLAFOND_PEA - cumPeaBase));
           cumPea = cumPea * (1 + rendementPea) + peaContrib;
+          cumPeaBase += peaContrib;
           cumPer = cumPer * (1 + rendementPer);
         } else {
           cumCapi = cumCapi * (1 + rendementCapi);
