@@ -177,6 +177,7 @@ function getUrlParams() {
     salaireBrut: num('salaireBrut', DEFAULTS.salaireBrut),
     divNetsVoulus: num('divNetsVoulus', DEFAULTS.divNetsVoulus),
     rendement: num('rendement', DEFAULTS.rendement),
+    ageActuel: num('ageActuel', DEFAULTS.ageActuel),
     ageObjectif: num('ageObjectif', DEFAULTS.ageObjectif),
     joursLeverLePied: num('joursLeverLePied', DEFAULTS.joursLeverLePied),
     croquerCapital: bool('croquerCapital', DEFAULTS.croquerCapital),
@@ -199,6 +200,7 @@ export default function App() {
   const [salaireBrut, setSalaireBrut] = useState(INIT.salaireBrut);
   const [divNetsVoulus, setDivNetsVoulus] = useState(INIT.divNetsVoulus);
   const [rendement, setRendement] = useState(INIT.rendement);
+  const [ageActuel, setAgeActuel] = useState(INIT.ageActuel);
   const [ageObjectif, setAgeObjectif] = useState(INIT.ageObjectif);
   const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
   const [croquerCapital, setCroquerCapital] = useState(INIT.croquerCapital);
@@ -222,12 +224,12 @@ export default function App() {
   const params = {
     ...DEFAULTS,
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-    frais: fraisAvecPer, rendement, ageObjectif,
+    frais: fraisAvecPer, rendement, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
     ratioTreso, ratioCapi
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -235,7 +237,7 @@ export default function App() {
   const handleCopyLLM = () => {
     const text = '```\n' + formatReport({
       tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
-      divNetsVoulus: divNetsEffectif, rendement, ageObjectif, joursLeverLePied,
+      divNetsVoulus: divNetsEffectif, rendement, ageActuel, ageObjectif, joursLeverLePied,
       croquerCapital, ageFin, ratioTreso, ratioCapi, r
     }) + '\n```';
     navigator.clipboard.writeText(text).then(() => {
@@ -254,7 +256,13 @@ export default function App() {
             <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
               Simulateur Freelance SASU
             </h1>
-            <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0' }}>Dev Senior · 15 ans XP · Toutes formules vérifiables</p>
+            <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+              J'ai <input type="number" min={20} max={65} value={ageActuel}
+                onChange={e => setAgeActuel(Math.max(20, Math.min(65, parseInt(e.target.value) || 20)))}
+                style={{ width: 42, padding: '2px 4px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.3)',
+                  background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, fontWeight: 700,
+                  textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }} /> ans · Toutes formules vérifiables
+            </p>
           </div>
           <button onClick={handleCopyLLM} style={{
             background: copied ? '#38a169' : 'rgba(255,255,255,0.15)',

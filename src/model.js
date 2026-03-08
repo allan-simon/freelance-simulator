@@ -399,8 +399,8 @@ export function computeAll(params) {
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
-export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, r }) {
-  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
+export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, r }) {
+  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
 
   const L = [];
   L.push(`$ ${cmd}`);
@@ -453,7 +453,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   L.push('  Timeline :');
   L.push('  Age  Phase            Patrimoine     Rev.passif/m  Missions/m  Retraite/m  Total/m');
   L.push('  ' + '─'.repeat(90));
-  const keyAges = new Set([DEFAULTS.ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
+  const keyAges = new Set([ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
   for (const p of r.projection) {
     if (keyAges.has(p.age)) {
       L.push(
