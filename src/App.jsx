@@ -199,7 +199,10 @@ function getUrlParams() {
     jours: num('jours', DEFAULTS.jours),
     salaireBrut: num('salaireBrut', DEFAULTS.salaireBrut),
     divNetsVoulus: num('divNetsVoulus', DEFAULTS.divNetsVoulus),
-    rendement: num('rendement', DEFAULTS.rendement),
+    rendementCapi: num('rendementCapi', num('rendement', null) ?? DEFAULTS.rendementCapi),
+    rendementScpi: num('rendementScpi', num('rendement', null) ?? DEFAULTS.rendementScpi),
+    rendementPea:  num('rendementPea',  num('rendement', null) ?? DEFAULTS.rendementPea),
+    rendementPer:  num('rendementPer',  num('rendement', null) ?? DEFAULTS.rendementPer),
     ageActuel: num('ageActuel', DEFAULTS.ageActuel),
     ageObjectif: num('ageObjectif', DEFAULTS.ageObjectif),
     joursLeverLePied: num('joursLeverLePied', DEFAULTS.joursLeverLePied),
@@ -225,7 +228,10 @@ export default function App() {
   const [jours, setJours] = useState(INIT.jours);
   const [salaireBrut, setSalaireBrut] = useState(INIT.salaireBrut);
   const [divNetsVoulus, setDivNetsVoulus] = useState(INIT.divNetsVoulus);
-  const [rendement, setRendement] = useState(INIT.rendement);
+  const [rendementCapi, setRendementCapi] = useState(INIT.rendementCapi);
+  const [rendementScpi, setRendementScpi] = useState(INIT.rendementScpi);
+  const [rendementPea,  setRendementPea]  = useState(INIT.rendementPea);
+  const [rendementPer,  setRendementPer]  = useState(INIT.rendementPer);
   const [ageActuel, setAgeActuel] = useState(INIT.ageActuel);
   const [ageObjectif, setAgeObjectif] = useState(INIT.ageObjectif);
   const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
@@ -253,12 +259,12 @@ export default function App() {
   const params = {
     ...DEFAULTS,
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-    frais: fraisAvecPer, rendement, ageActuel, ageObjectif,
+    frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
     ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -270,7 +276,10 @@ export default function App() {
     set('jours', jours, DEFAULTS.jours);
     set('salaireBrut', salaireBrut, DEFAULTS.salaireBrut);
     set('divNetsVoulus', divNetsVoulus, DEFAULTS.divNetsVoulus);
-    set('rendement', rendement, DEFAULTS.rendement);
+    set('rendementCapi', rendementCapi, DEFAULTS.rendementCapi);
+    set('rendementScpi', rendementScpi, DEFAULTS.rendementScpi);
+    set('rendementPea',  rendementPea,  DEFAULTS.rendementPea);
+    set('rendementPer',  rendementPer,  DEFAULTS.rendementPer);
     set('ageActuel', ageActuel, DEFAULTS.ageActuel);
     set('ageObjectif', ageObjectif, DEFAULTS.ageObjectif);
     set('joursLeverLePied', joursLeverLePied, DEFAULTS.joursLeverLePied);
@@ -285,7 +294,7 @@ export default function App() {
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -302,7 +311,7 @@ export default function App() {
   const handleCopyLLM = () => {
     const text = '```\n' + formatReport({
       tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
-      divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied,
+      divNetsVoulus: divNetsEffectif, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied,
       croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r
     }) + '\n```';
     navigator.clipboard.writeText(text).then(() => {
@@ -553,7 +562,10 @@ export default function App() {
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            <Slider label="Rendement net moyen" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" note="Rendement annuel net de frais, avant inflation — moyenne pondérée de vos enveloppes (CTO, SCPI, PEA, PER)" />
+            <Slider label="Rendement contrat capi" value={rendementCapi} onChange={setRendementCapi} min={0.02} max={0.10} step={0.005} format="pct" note="Contrat capi lux, FID actions" />
+            <Slider label="Rendement SCPI" value={rendementScpi} onChange={setRendementScpi} min={0.02} max={0.08} step={0.005} format="pct" note="Immobilier, loyers nets de frais" />
+            <Slider label="Rendement PEA" value={rendementPea} onChange={setRendementPea} min={0.02} max={0.12} step={0.005} format="pct" note="ETF actions européennes" />
+            <Slider label="Rendement PER" value={rendementPer} onChange={setRendementPer} min={0.02} max={0.08} step={0.005} format="pct" note="Allocation mixte/défensive" />
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />

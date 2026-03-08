@@ -5,7 +5,7 @@
 //   node cli.js --step1 --tjm 1200 --jours 220
 //   node cli.js --step2 --tjm 1200 --jours 220
 //   node cli.js --step3 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000
-//   node cli.js --step4 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000 --rendement 0.06 --ageObjectif 50
+//   node cli.js --step4 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000 --rendementCapi 0.06 --rendementScpi 0.045 --ageObjectif 50
 //   node cli.js --all   (run all steps with defaults, or override any param)
 // ============================================================
 
@@ -46,7 +46,12 @@ const frais = { ...DEFAULTS.frais };
 const salaireBrut = pick('salaireBrut');
 const per = pick('per');
 const divNetsVoulus = pick('divNetsVoulus');
-const rendement = pick('rendement');
+// --rendement override les 4 enveloppes (backward compat), sinon defaults individuels
+const rendementFallback = args.rendement !== undefined ? args.rendement : null;
+const rendementCapi = args.rendementCapi !== undefined ? args.rendementCapi : (rendementFallback ?? DEFAULTS.rendementCapi);
+const rendementScpi = args.rendementScpi !== undefined ? args.rendementScpi : (rendementFallback ?? DEFAULTS.rendementScpi);
+const rendementPea  = args.rendementPea  !== undefined ? args.rendementPea  : (rendementFallback ?? DEFAULTS.rendementPea);
+const rendementPer  = args.rendementPer  !== undefined ? args.rendementPer  : (rendementFallback ?? DEFAULTS.rendementPer);
 const ageObjectif = pick('ageObjectif');
 const joursLeverLePied = pick('joursLeverLePied');
 const croquerCapital = pick('croquerCapital');
@@ -65,7 +70,8 @@ function buildParams() {
       seuilIS: DEFAULTS.seuilIS, tauxISReduit: DEFAULTS.tauxISReduit, tauxISNormal: DEFAULTS.tauxISNormal,
       tauxFlatTax: DEFAULTS.tauxFlatTax, abattementIR: DEFAULTS.abattementIR,
       revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales: DEFAULTS.partsFiscales,
-      frais: fraisAvecPer, rendement, ageActuel: DEFAULTS.ageActuel, ageObjectif,
+      frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer,
+      ageActuel: DEFAULTS.ageActuel, ageObjectif,
       croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi, inflation
     },
     constraints: c,
@@ -120,7 +126,7 @@ function step3() {
   // formatReport contient steps 1-4, on extrait juste step 3
   const text = formatReport({
     tjm, jours, salaireBrut: params.salaireBrut, per: perEffectif,
-    divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
+    divNetsVoulus: divNetsEffectif, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
     croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI: DEFAULTS.salaireBrutCDI, r
   });
   // Afficher seulement steps 1-3 (couper avant step 4)
@@ -129,7 +135,11 @@ function step3() {
   console.log(lines.slice(1, step4idx > 0 ? step4idx - 1 : undefined).join('\n')); // skip la ligne cmd
   console.log();
   console.log('Ranges pour step 4 :');
-  console.log(`  --rendement        ${RANGES.rendement.min}..${RANGES.rendement.max} (step ${RANGES.rendement.step})`);
+  console.log(`  --rendementCapi    ${RANGES.rendementCapi.min}..${RANGES.rendementCapi.max} (contrat capi)`);
+  console.log(`  --rendementScpi    ${RANGES.rendementScpi.min}..${RANGES.rendementScpi.max} (SCPI)`);
+  console.log(`  --rendementPea     ${RANGES.rendementPea.min}..${RANGES.rendementPea.max} (PEA)`);
+  console.log(`  --rendementPer     ${RANGES.rendementPer.min}..${RANGES.rendementPer.max} (PER)`);
+  console.log(`  --rendement        (fallback unique pour les 4 enveloppes)`);
   console.log(`  --ageObjectif      ${RANGES.ageObjectif.min}..${RANGES.ageObjectif.max}`);
   console.log(`  --joursLeverLePied ${RANGES.joursLeverLePied.min}..${RANGES.joursLeverLePied.max}`);
   console.log(`  --croquerCapital   true|false`);
@@ -141,7 +151,7 @@ function step4() {
   const r = computeAll(params);
   console.log(formatReport({
     tjm, jours, salaireBrut: params.salaireBrut, per: perEffectif,
-    divNetsVoulus: divNetsEffectif, rendement, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
+    divNetsVoulus: divNetsEffectif, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel: DEFAULTS.ageActuel, ageObjectif, joursLeverLePied,
     croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI: DEFAULTS.salaireBrutCDI, r
   }));
 }
@@ -174,7 +184,7 @@ if (args.json) {
   console.log('  node cli.js --step1 [--tjm N] [--jours N]');
   console.log('  node cli.js --step2 [--tjm N] [--jours N]');
   console.log('  node cli.js --step3 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N]');
-  console.log('  node cli.js --step4 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N] [--rendement N] [--ageObjectif N] [--joursLeverLePied N] [--croquerCapital true|false] [--ageFin N]');
+  console.log('  node cli.js --step4 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N] [--rendementCapi N] [--rendementScpi N] [--rendementPea N] [--rendementPer N] [--ageObjectif N] [--joursLeverLePied N] [--croquerCapital true|false] [--ageFin N]');
   console.log('  node cli.js --all   (toutes les steps avec les défauts)');
   console.log('  node cli.js --json  (sortie JSON complète pour traitement programmatique)');
   console.log();
