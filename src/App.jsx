@@ -557,7 +557,7 @@ export default function App() {
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
-            <NumberInput label="Salaire brut moyen CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={0} max={200000} step={1000} suffix="€" />
+            <NumberInput label="Dernier salaire brut CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={0} max={200000} step={1000} suffix="€" />
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ padding: '10px 16px', background: croquerCapital ? '#fff5f5' : '#f0fff4',
@@ -661,7 +661,7 @@ export default function App() {
             </table>
           </div>
           <div style={{ marginTop: 12, fontSize: 11, color: '#a0aec0' }}>
-            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire AGIRC-ARRCO : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois — estimé sur {ageActuel - 22} ans CDI à {fmt(salaireBrutCDI)} brut + {ageObjectif - ageActuel} ans SASU à {fmt(params.salaireBrut)} brut, taux plein à 67 ans.
+            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire AGIRC-ARRCO : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois — estimé sur {ageActuel - 22} ans CDI (dernier salaire {fmt(salaireBrutCDI)} brut, progression +2,5%/an) + {ageObjectif - ageActuel} ans SASU à {fmt(params.salaireBrut)} brut, taux plein à 67 ans.
             Sources : <a href="https://www.legislation.cnav.fr/Pages/bareme.aspx?Nom=salaire_annuel_moyen_702" target="_blank" rel="noopener" style={{ color: '#718096' }}>SAM (CNAV)</a> · <a href="https://www.agirc-arrco.fr/mes-services-particuliers/les-experts-retraite/valeur-du-point/" target="_blank" rel="noopener" style={{ color: '#718096' }}>Points AGIRC-ARRCO</a> · <a href="https://www.service-public.fr/particuliers/vosdroits/F21552" target="_blank" rel="noopener" style={{ color: '#718096' }}>Calcul pension base</a>
           </div>
         </Card>

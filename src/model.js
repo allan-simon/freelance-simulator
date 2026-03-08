@@ -220,21 +220,30 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   const trimestres = Math.min(totalAnnees * 4, TRIMESTRES_REQUIS);
 
   // SAM : 25 meilleures années, salaires plafonnés au PASS
-  const salCDI = Math.min(salaireBrutCDI, PASS_RET);
+  // Courbe salariale CDI : progression ~2,5%/an nominal (inflation + ancienneté/mérite)
+  // salaireBrutCDI = salaire actuel (point d'arrivée), on reconstitue la trajectoire
+  const PROGRESSION_SAL = 0.025; // 2,5%/an nominal — INSEE cadres, moyenne long terme
   const salFL = Math.min(salaireBrut, PASS_RET);
+
+  // Reconstituer les salaires CDI année par année (du plus ancien au plus récent)
+  const salairesCDI = [];
+  for (let i = anneesCDI - 1; i >= 0; i--) {
+    // i années avant aujourd'hui → salaire = salaireBrutCDI / (1 + progression)^i
+    const salBrut = salaireBrutCDI / Math.pow(1 + PROGRESSION_SAL, i);
+    salairesCDI.push(Math.min(salBrut, PASS_RET)); // plafonné au PASS
+  }
 
   let sam;
   if (totalAnnees <= 0) {
     sam = 0;
-  } else if (totalAnnees <= 25) {
-    sam = (anneesCDI * salCDI + anneesFreelance * salFL) / totalAnnees;
   } else {
-    // Prendre les 25 meilleures années
-    const years = [];
-    for (let i = 0; i < anneesCDI; i++) years.push(salCDI);
+    // Collecter toutes les années (CDI progressif + freelance constant)
+    const years = [...salairesCDI];
     for (let i = 0; i < anneesFreelance; i++) years.push(salFL);
+    // Prendre les 25 meilleures (ou toutes si moins de 25 ans)
     years.sort((a, b) => b - a);
-    sam = years.slice(0, 25).reduce((a, b) => a + b, 0) / 25;
+    const n = Math.min(25, years.length);
+    sam = years.slice(0, n).reduce((a, b) => a + b, 0) / n;
   }
 
   // Pension de base : SAM × 50% × prorata trimestres
@@ -249,12 +258,15 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   const VALEUR_POINT = 1.4159; // valeur de service 2024
 
   let totalPoints = 0;
-  // Points CDI
-  const t1c = Math.min(salaireBrutCDI, PASS_RET);
-  const t2c = Math.max(0, Math.min(salaireBrutCDI, 8 * PASS_RET) - PASS_RET);
-  totalPoints += anneesCDI * (t1c * TAUX_T1 + t2c * TAUX_T2) / PRIX_POINT;
+  // Points CDI : année par année avec la courbe salariale progressive
+  for (let i = 0; i < anneesCDI; i++) {
+    const salBrut = salaireBrutCDI / Math.pow(1 + PROGRESSION_SAL, anneesCDI - 1 - i);
+    const t1 = Math.min(salBrut, PASS_RET);
+    const t2 = Math.max(0, Math.min(salBrut, 8 * PASS_RET) - PASS_RET);
+    totalPoints += (t1 * TAUX_T1 + t2 * TAUX_T2) / PRIX_POINT;
+  }
 
-  // Points freelance (SASU)
+  // Points freelance (SASU) — salaire constant
   const t1f = Math.min(salaireBrut, PASS_RET);
   const t2f = Math.max(0, Math.min(salaireBrut, 8 * PASS_RET) - PASS_RET);
   totalPoints += anneesFreelance * (t1f * TAUX_T1 + t2f * TAUX_T2) / PRIX_POINT;
@@ -664,7 +676,13 @@ export function computeAll(params) {
       // Rente PER : montant nominal fixe (conversion viagère à 64 ans)
       const perRenteMois = (!croquerCapital && perRenteAnnuelleBrute > 0) ? Math.round(perRenteAnnuelleBrute * fiscNettePerEff / 12) : 0;
       // Revenus indexés sur l'inflation → nominal croît, réel constant
-      const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
+      // Retraite de base : revalorisée ≈ inflation (hypothèse optimiste mais standard)
+      // Complémentaire AGIRC-ARRCO : sous-indexée historiquement (ANI 2017, ~inflation − 0,3 pt/an)
+      const sousIndexationArrco = 0.003; // 0,3 pt/an de sous-revalorisation vs inflation
+      const facteurErosionArrco = Math.pow(1 - sousIndexationArrco, y);
+      const retraiteMois = phase === 3
+        ? Math.round(inflate(retraiteBaseMois) + inflate(retraiteCompMois) * facteurErosionArrco)
+        : 0;
       const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
 
       let revenuTotalMois;
@@ -688,11 +706,14 @@ export function computeAll(params) {
       if (phase === 1) {
         revenuTotalMoisReel = Math.round(netNetMensuel);
       } else if (croquerCapital) {
-        revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(revenuMissionsAnnuel / 12) + (phase === 3 ? retraiteTotaleMois : 0));
+        // Retraite en réel : base = valeur constante, complémentaire érodée par sous-indexation
+        const retraiteMoisReel = phase === 3 ? Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco) : 0;
+        revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(revenuMissionsAnnuel / 12) + retraiteMoisReel);
       } else if (phase === 2) {
         revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round(revenuMissionsAnnuel / 12) + (perDebloque ? perRenteMoisReel : 0));
       } else {
-        revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteTotaleMois + perRenteMoisReel);
+        const retraiteMoisReel = Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco);
+        revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteMoisReel + perRenteMoisReel);
       }
 
       projection.push({
