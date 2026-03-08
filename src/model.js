@@ -352,7 +352,9 @@ export function computeAll(params) {
   // SCPI détenues par la SASU : revenus fonciers taxés à l'IS (pas au barème IR du dirigeant),
   // puis flat tax sur la distribution au dirigeant. Même logique que le contrat capi.
   // On estime le revenu SCPI annuel pour calculer le taux IS moyen applicable.
-  const revenuScpiEstime = (resteSASU * ratioScpi) * rendement;
+  const ratioScpiEff = Math.max(0, 1 - ratioTreso - ratioCapi);
+  const resteSASUEstime = benefDistribuable - divBrutsSortis;
+  const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendement;
   const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
   const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
 
@@ -422,7 +424,7 @@ export function computeAll(params) {
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
   // On calcule le drawdown en excluant le PER avant 64 ans
   // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
-  const forfaitEstime = (resteSASU * ratioCapi) * 1.05 * tme;
+  const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
   const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime) };
   const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
@@ -636,7 +638,7 @@ export function computeAll(params) {
       const totalAvecPer = totalHorsPer + cumPer;
 
       const fiscPondYear = fiscalitePonderee(cumCapi, cumCapiBase, cumScpi, cumPea, cumPer, false, cumForfaitsIS);
-      const tauxRetrait = Math.max(0, rendement - inflation); // SWR = rendement réel, préserve le capital en pouvoir d'achat
+      const tauxRetrait = Math.max(0, rendementNetDrag - inflation); // SWR = rendement réel net du drag fiscal IS, préserve le capital en pouvoir d'achat
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
@@ -720,7 +722,7 @@ export function computeAll(params) {
     });
     const capitalFin = projScenario.total;
     const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi, peaPerso, per);
-    const tauxRetraitScenario = Math.max(0, rendement - inflation);
+    const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {
