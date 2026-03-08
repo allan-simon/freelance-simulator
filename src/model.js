@@ -343,7 +343,10 @@ export function computeAll(params) {
 
   // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
   // Les revenus de placement (forfait TME, revenus SCPI) consomment progressivement le seuil restant.
-  const seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
+  // En phase 1 : le résultat d'exploitation consomme le seuil → peu/pas de reste pour les placements.
+  // En phases 2/3 : pas de résultat d'exploitation → seuil intégralement disponible pour les placements.
+  // NB : `let` car recalculé dans la boucle de projection selon la phase courante.
+  let seuilISRestant = Math.max(0, seuilIS - resultatAvantIS);
   const computeISOnAmount = (amount) =>
     Math.min(amount, seuilISRestant) * tauxISReduit + Math.max(0, amount - seuilISRestant) * tauxISNormal;
   const tauxISMoyen = (amount) => amount > 0 ? computeISOnAmount(amount) / amount : tauxISNormal;
@@ -609,6 +612,13 @@ export function computeAll(params) {
           cumPer = 0; // capital parti chez l'assureur
         }
       }
+
+      // Recalculer le seuil IS restant selon la phase :
+      // Phase 1 → le résultat d'exploitation (indexé inflation) consomme le seuil
+      // Phases 2/3 → pas d'activité, seuil intégralement disponible pour les placements
+      seuilISRestant = phase === 1
+        ? Math.max(0, seuilIS - resultatAvantIS * infY)
+        : seuilIS;
 
       // Drag fiscal annuel sur le capital détenu par la SASU :
       // Le forfait capi et les revenus SCPI partagent le même seuil IS restant.
