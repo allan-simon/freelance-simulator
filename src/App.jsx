@@ -48,54 +48,67 @@ function Slider({ label, value, onChange, min, max, step, format = "money", suff
   );
 }
 
-function TriSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d', color2 = '#2563eb', color3 = '#38a169', amounts }) {
-  const barRef = useRef(null);
+function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d', color2 = '#2563eb', color3 = '#38a169', amounts }) {
+  const svgRef = useRef(null);
   const dragging = useRef(null);
 
+  const v3 = Math.max(0, 1 - v1 - v2);
   const pct1 = Math.round(v1 * 100);
   const pct2 = Math.round(v2 * 100);
-  const pct3 = Math.round((1 - v1 - v2) * 100);
+  const pct3 = Math.round(v3 * 100);
 
-  const getVal = useCallback((e) => {
-    const rect = barRef.current.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const size = 160;
+  const cx = size / 2, cy = size / 2;
+  const R = 64, ri = 38;
+  const midR = (R + ri) / 2;
+  const TWO_PI = 2 * Math.PI;
+  const ANG0 = -Math.PI / 2; // 12 o'clock
+
+  const toXY = (frac, radius) => {
+    const a = ANG0 + frac * TWO_PI;
+    return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+  };
+
+  const arcPath = (f1, f2) => {
+    const span = f2 - f1;
+    if (span < 0.003) return '';
+    const a1 = ANG0 + f1 * TWO_PI, a2 = ANG0 + f2 * TWO_PI;
+    const c1 = Math.cos(a1), s1 = Math.sin(a1), c2 = Math.cos(a2), s2 = Math.sin(a2);
+    const lg = span > 0.5 ? 1 : 0;
+    return `M${cx+R*c1},${cy+R*s1} A${R},${R} 0 ${lg} 1 ${cx+R*c2},${cy+R*s2} L${cx+ri*c2},${cy+ri*s2} A${ri},${ri} 0 ${lg} 0 ${cx+ri*c1},${cy+ri*s1} Z`;
+  };
+
+  const getFrac = useCallback((ev) => {
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    const scX = size / rect.width, scY = size / rect.height;
+    const px = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const py = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    const dx = (px - rect.left) * scX - cx;
+    const dy = (py - rect.top) * scY - cy;
+    let a = Math.atan2(dy, dx) - ANG0;
+    while (a < 0) a += TWO_PI;
+    return a / TWO_PI;
   }, []);
 
-  const onMove = useCallback((e) => {
-    if (!dragging.current) return;
-    e.preventDefault();
-    const x = getVal(e);
-    const step = 0.05;
-    const snap = v => Math.round(v / step) * step;
-    if (dragging.current === 'h1') {
-      const newV1 = snap(Math.min(x, 1 - v2));
-      onChange(Math.max(0, newV1), v2);
-    } else {
-      const newV2 = snap(Math.min(x - v1, 1 - v1));
-      onChange(v1, Math.max(0, newV2));
-    }
-  }, [v1, v2, onChange, getVal]);
-
-  const onUp = useCallback(() => { dragging.current = null; }, []);
+  const step = 0.01;
+  const snap = v => Math.round(v / step) * step;
 
   const onDown = useCallback((handle) => (e) => {
     e.preventDefault();
     dragging.current = handle;
+    const b2 = v1 + v2;
+
     const move = (ev) => {
       if (!dragging.current) return;
       ev.preventDefault();
-      const rect = barRef.current.getBoundingClientRect();
-      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const step = 0.05;
-      const snap = v => Math.round(v / step) * step;
+      const f = getFrac(ev);
       if (handle === 'h1') {
-        const newV1 = snap(Math.min(x, 1 - v2));
-        onChange(Math.max(0, newV1), v2);
+        const nv1 = snap(Math.max(0, Math.min(b2, f)));
+        onChange(nv1, snap(Math.max(0, b2 - nv1)));
       } else {
-        const newV2 = snap(Math.min(x - v1, 1 - v1));
-        onChange(v1, Math.max(0, newV2));
+        const nv2 = snap(Math.max(0, Math.min(1 - v1, f - v1)));
+        onChange(v1, nv2);
       }
     };
     const up = () => {
@@ -109,23 +122,38 @@ function TriSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
     document.addEventListener('mouseup', up);
     document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', up);
-  }, [v1, v2, onChange]);
+  }, [v1, v2, onChange, getFrac]);
 
-  const handleStyle = (left) => ({
-    position: 'absolute', left: `${left * 100}%`, top: '50%', transform: 'translate(-50%, -50%)',
-    width: 18, height: 18, borderRadius: '50%', background: '#fff', border: '2px solid #4a5568',
-    cursor: 'ew-resize', zIndex: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-    touchAction: 'none',
-  });
+  const [hx1, hy1] = toXY(v1, midR);
+  const [hx2, hy2] = toXY(v1 + v2, midR);
+
+  // Label positions at midpoint of each arc
+  const labelR = R + 12;
+  const [lx1, ly1] = toXY(v1 / 2, labelR);
+  const [lx2, ly2] = toXY(v1 + v2 / 2, labelR);
+  const [lx3, ly3] = toXY(v1 + v2 + v3 / 2, labelR);
 
   return (
     <div style={{ marginBottom: 12 }}>
-      <div ref={barRef} style={{ position: 'relative', height: 24, borderRadius: 6, overflow: 'visible', display: 'flex', cursor: 'pointer', userSelect: 'none' }}>
-        <div style={{ width: `${pct1}%`, background: color1, borderRadius: '6px 0 0 6px', minWidth: pct1 > 0 ? 2 : 0 }} />
-        <div style={{ width: `${pct2}%`, background: color2, minWidth: pct2 > 0 ? 2 : 0 }} />
-        <div style={{ width: `${pct3}%`, background: color3, borderRadius: '0 6px 6px 0', minWidth: pct3 > 0 ? 2 : 0 }} />
-        <div onMouseDown={onDown('h1')} onTouchStart={onDown('h1')} style={handleStyle(v1)} />
-        <div onMouseDown={onDown('h2')} onTouchStart={onDown('h2')} style={handleStyle(v1 + v2)} />
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <svg ref={svgRef} width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+          style={{ touchAction: 'none', userSelect: 'none', overflow: 'visible' }}>
+          <path d={arcPath(0, v1)} fill={color1} />
+          <path d={arcPath(v1, v1 + v2)} fill={color2} />
+          <path d={arcPath(v1 + v2, 1)} fill={color3} />
+          {pct1 >= 10 && <text x={lx1} y={ly1} textAnchor="middle" dominantBaseline="central"
+            style={{ fontSize: 10, fontWeight: 700, fill: color1, pointerEvents: 'none' }}>{pct1}%</text>}
+          {pct2 >= 10 && <text x={lx2} y={ly2} textAnchor="middle" dominantBaseline="central"
+            style={{ fontSize: 10, fontWeight: 700, fill: color2, pointerEvents: 'none' }}>{pct2}%</text>}
+          {pct3 >= 10 && <text x={lx3} y={ly3} textAnchor="middle" dominantBaseline="central"
+            style={{ fontSize: 10, fontWeight: 700, fill: color3, pointerEvents: 'none' }}>{pct3}%</text>}
+          <circle cx={hx1} cy={hy1} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2}
+            style={{ cursor: 'grab', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+            onMouseDown={onDown('h1')} onTouchStart={onDown('h1')} />
+          <circle cx={hx2} cy={hy2} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2}
+            style={{ cursor: 'grab', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+            onMouseDown={onDown('h2')} onTouchStart={onDown('h2')} />
+        </svg>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
         {[{ label: label1, pct: pct1, color: color1, amount: amounts[0] },
@@ -491,8 +519,8 @@ export default function App() {
               {/* Colonne droite : Reste en SASU */}
               <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en SASU — {fmt(r.resteSASU)}</div>
-                <div style={{ fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées pour répartir entre trésorerie, capitalisation et SCPI</div>
-                <TriSlider
+                <div style={{ fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées du graphique pour répartir</div>
+                <PieSlider
                   v1={ratioTreso} v2={ratioCapi}
                   onChange={(t, c) => { setRatioTreso(t); setRatioCapi(c); }}
                   label1="Réserve tréso" label2="Contrat capi" label3="SCPI (usufruit)"
