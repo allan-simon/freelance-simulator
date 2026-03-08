@@ -90,6 +90,16 @@ Voir [guide-optimisation.md](guide-optimisation.md) pour les stratégies détail
 - Capital décès (3x salaire brut)
 - RC Pro
 
+## Liens vers le simulateur web
+
+L'app est déployée sur GitHub Pages et accepte les query params. Après chaque scénario, génère un lien cliquable pour que l'utilisateur puisse explorer dans l'UI :
+
+```
+https://allan-simon.github.io/freelance-simulator/?tjm=1200&jours=220&salaireBrut=60000&per=5000&divNetsVoulus=40000&rendement=0.06&ageObjectif=50&joursLeverLePied=50&croquerCapital=false&ageFin=80&ratioTreso=0.15&ratioCapi=0.65
+```
+
+N'inclure que les paramètres qui diffèrent des défauts. Les params disponibles sont : `tjm`, `jours`, `salaireBrut`, `divNetsVoulus`, `rendement`, `ageObjectif`, `joursLeverLePied`, `croquerCapital`, `ageFin`, `per`, `ratioTreso`, `ratioCapi`.
+
 ## Ton style
 
 - **Direct et chiffré** : chaque conseil s'appuie sur un output CLI
@@ -98,3 +108,4 @@ Voir [guide-optimisation.md](guide-optimisation.md) pour les stratégies détail
 - **Français** : réponds toujours en français
 - Ne fais pas de calcul toi-même, utilise toujours le CLI
 - Quand tu compares des scénarios, mets les chiffres côte à côte dans un tableau
+- Termine chaque réponse avec un lien vers le simulateur web pré-rempli avec les params du scénario

@@ -158,22 +158,54 @@ function Row({ label, value, bold, highlight, sub }) {
 }
 
 // ============================================================
+// QUERY PARAMS — initialisation depuis l'URL
+// ============================================================
+
+function getUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  const num = (key, fallback) => {
+    const v = p.get(key);
+    return v !== null && !isNaN(v) ? parseFloat(v) : fallback;
+  };
+  const bool = (key, fallback) => {
+    const v = p.get(key);
+    return v !== null ? v === 'true' : fallback;
+  };
+  return {
+    tjm: num('tjm', DEFAULTS.tjm),
+    jours: num('jours', DEFAULTS.jours),
+    salaireBrut: num('salaireBrut', DEFAULTS.salaireBrut),
+    divNetsVoulus: num('divNetsVoulus', DEFAULTS.divNetsVoulus),
+    rendement: num('rendement', DEFAULTS.rendement),
+    ageObjectif: num('ageObjectif', DEFAULTS.ageObjectif),
+    joursLeverLePied: num('joursLeverLePied', DEFAULTS.joursLeverLePied),
+    croquerCapital: bool('croquerCapital', DEFAULTS.croquerCapital),
+    ageFin: num('ageFin', DEFAULTS.ageFin),
+    per: num('per', DEFAULTS.per),
+    ratioTreso: num('ratioTreso', DEFAULTS.ratioTreso),
+    ratioCapi: num('ratioCapi', DEFAULTS.ratioCapi),
+  };
+}
+
+const INIT = getUrlParams();
+
+// ============================================================
 // APP PRINCIPALE
 // ============================================================
 
 export default function App() {
-  const [tjm, setTjm] = useState(1200);
-  const [jours, setJours] = useState(220);
-  const [salaireBrut, setSalaireBrut] = useState(60000);
-  const [divNetsVoulus, setDivNetsVoulus] = useState(40000);
-  const [rendement, setRendement] = useState(0.06);
-  const [ageObjectif, setAgeObjectif] = useState(50);
-  const [joursLeverLePied, setJoursLeverLePied] = useState(50);
-  const [croquerCapital, setCroquerCapital] = useState(false);
-  const [ageFin, setAgeFin] = useState(80);
-  const [per, setPer] = useState(5000);
-  const [ratioTreso, setRatioTreso] = useState(0.15);
-  const [ratioCapi, setRatioCapi] = useState(0.65);
+  const [tjm, setTjm] = useState(INIT.tjm);
+  const [jours, setJours] = useState(INIT.jours);
+  const [salaireBrut, setSalaireBrut] = useState(INIT.salaireBrut);
+  const [divNetsVoulus, setDivNetsVoulus] = useState(INIT.divNetsVoulus);
+  const [rendement, setRendement] = useState(INIT.rendement);
+  const [ageObjectif, setAgeObjectif] = useState(INIT.ageObjectif);
+  const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
+  const [croquerCapital, setCroquerCapital] = useState(INIT.croquerCapital);
+  const [ageFin, setAgeFin] = useState(INIT.ageFin);
+  const [per, setPer] = useState(INIT.per);
+  const [ratioTreso, setRatioTreso] = useState(INIT.ratioTreso);
+  const [ratioCapi, setRatioCapi] = useState(INIT.ratioCapi);
 
   const [frais] = useState(DEFAULTS.frais);
   const caHT = tjm * jours;
