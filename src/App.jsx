@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
-import { computeAll, DEFAULTS, formatReport } from "./model.js";
+import { computeAll, computeChargesPatronales, computeConstraints, DEFAULTS, formatReport } from "./model.js";
 
 // ============================================================
 // COMPOSANTS UI
@@ -176,21 +176,15 @@ export default function App() {
   const [ratioCapi, setRatioCapi] = useState(0.65);
 
   const [frais] = useState(DEFAULTS.frais);
-  const coeff = 1 + DEFAULTS.tauxPatronales;
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
-  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / coeff / 5000) * 5000;
-  const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
-  const superbrut_ = salaireBrutEffectif * coeff;
-  const maxPer = Math.max(0, Math.floor((caHT - superbrut_ - totalFraisHorsPer) / 500) * 500);
-  const perEffectif = Math.min(per, maxPer);
+
+  // Contraintes dynamiques (calcul exact des charges patronales par tranche)
+  const c = computeConstraints({ tjm, jours, frais, salaireBrut, per });
+  const { maxSalaireBrut, salaireBrutEffectif, maxPer, perEffectif, maxDivNets } = c;
+  const superbrut_ = salaireBrutEffectif + computeChargesPatronales(salaireBrutEffectif);
   const fraisAvecPer = { ...frais, per: perEffectif };
   const totalFrais = totalFraisHorsPer + perEffectif;
-
-  // Max dividendes nets distribuables
-  const resultat_ = Math.max(0, caHT - superbrut_ - totalFrais);
-  const is_ = Math.min(resultat_, DEFAULTS.seuilIS) * DEFAULTS.tauxISReduit + Math.max(0, resultat_ - DEFAULTS.seuilIS) * DEFAULTS.tauxISNormal;
-  const maxDivNets = Math.floor((resultat_ - is_) * (1 - DEFAULTS.tauxFlatTax) / 1000) * 1000;
   const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, maxDivNets));
 
   const params = {
@@ -336,7 +330,7 @@ export default function App() {
               <summary style={{ fontSize: 11, color: '#975a16', cursor: 'pointer', fontWeight: 600 }}>Détail du compte de résultat</summary>
               <div style={{ marginTop: 8, padding: '8px 0' }}>
                 <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
-                <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(0.42)} [1]`} />
+                <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(r.chargesPatronales / salaireBrutEffectif)} [1]`} />
                 <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
                 <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
                 <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 100 000 € puis 25% [2]`} />
@@ -630,12 +624,12 @@ export default function App() {
           <h3 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 700, color: '#1a365d',
             textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>Sources réglementaires (2026)</h3>
           <div style={{ fontSize: 11, color: '#4a5568', lineHeight: 1.8, fontFamily: "'DM Sans', sans-serif" }}>
-            <div><strong>[1]</strong> Cotisations patronales ~42% — <a href="https://www.legalstart.fr/fiches-pratiques/sasu/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Legalstart</a> · <a href="https://mon-entreprise.urssaf.fr/simulateurs/sasu" target="_blank" rel="noopener noreferrer">Simulateur URSSAF</a></div>
+            <div><strong>[1]</strong> Cotisations patronales ~{fmtPct(r.chargesPatronales / salaireBrutEffectif)} (calcul exact par tranche, PASS = 48 060 €) : maladie 13% · vieillesse 8,55%+2,02% · AF 5,25% · AT/MP 0,44% · CSA 0,30% · FNAL 0,10% · AGIRC-ARRCO 4,72%/12,95% · CEG 1,29%/1,62% · CET 0,21% · prévoyance décès 1,50% · APEC 0,036% · formation 0,55% · apprentissage 0,68%. Le président SASU ne bénéficie pas du taux réduit maladie (7%) ni AF (3,45%) ni Fillon — <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006742553" target="_blank" rel="noopener noreferrer">CSS L311-3</a> · <a href="https://sas-sasu.info/charges-sociales-president-sas-sasu/" target="_blank" rel="noopener noreferrer">sas-sasu.info</a> · <a href="https://mon-entreprise.urssaf.fr/simulateurs/sasu" target="_blank" rel="noopener noreferrer">Simulateur URSSAF</a></div>
             <div><strong>[2]</strong> IS : 15% → 100 000 € puis 25% (LDF 2026) — <a href="https://www.legifiscal.fr/actualites-fiscales/4306-plf-2026-seuil-is-pme-15-porte-100000.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
             <div><strong>[3]</strong> Cotisations salariales ~28% — <a href="https://www.dougs.fr/blog/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Dougs</a> · <a href="https://entreprendre.service-public.gouv.fr/vosdroits/F36240" target="_blank" rel="noopener noreferrer">Service Public</a></div>
             <div><strong>[4]</strong> Flat tax 31,4% (LFSS 2026, CSG capital +1,4pt) — <a href="https://www.legifiscal.fr/actualites-fiscales/4320-plfss-2026-flat-tax-314-adopte.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.dougs.fr/blog/flat-taxe-dividendes/" target="_blank" rel="noopener noreferrer">Dougs</a></div>
             <div><strong>[5]</strong> Barème IR 2026 (revenus 2025, +0,9%) — <a href="https://www.service-public.gouv.fr/particuliers/actualites/A18045" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://simulateur-ir-ifi.impots.gouv.fr/calcul_impot/2026/complet/index.htm" target="_blank" rel="noopener noreferrer">impots.gouv.fr</a></div>
-            <div><strong>[6]</strong> Chèques-vacances ANCV exonérés (plafond ~540 €/an) — <a href="https://www.nexco-expertise.com/cheques-vacances-plafonds-exonerations-2026" target="_blank" rel="noopener noreferrer">Nexco</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-ses-ressources-humaines-et-ses-salaries/entreprises-tout-ce-que-vous-devez-savoir" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
+            <div><strong>[6]</strong> Chèques-vacances ANCV exonérés (30% × SMIC mensuel = 547 €/an, CSG/CRDS reste due) — <a href="https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006074073/LEGISCTA000006158495/" target="_blank" rel="noopener noreferrer">Code tourisme L411-1</a> · <a href="https://www.nexco-expertise.com/cheques-vacances-plafonds-exonerations-2026" target="_blank" rel="noopener noreferrer">Nexco</a></div>
             <div><strong>[7]</strong> PASS 2026 = 48 060 € · IJ Sécu 50% — <a href="https://www.service-public.fr/particuliers/actualites/A15386" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://www.ameli.fr/entreprise/vos-salaries/arret-de-travail/indemnites-journalieres" target="_blank" rel="noopener noreferrer">ameli.fr</a></div>
             <div><strong>[8]</strong> PER déblocage 64 ans (âge légal retraite, générations ≥1969) — <a href="https://www.service-public.gouv.fr/particuliers/vosdroits/F34982" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://www.service-public.gouv.fr/particuliers/actualites/A18825" target="_blank" rel="noopener noreferrer">Suspension réforme retraites</a></div>
             <div><strong>[9]</strong> Contrat de capitalisation luxembourgeois & super-privilège — <a href="https://arkefact.com/contrat-de-capitalisation-luxembourgeois/" target="_blank" rel="noopener noreferrer">Arkefact</a> · <a href="https://www.rothschildandco.com/fr/actualites/publications/2025/01/rothschild-martin-maurel--le-contrat-de-capitalisation-souscrit-par-une-personne-morale-soumise-a-limpot-sur-les-societes/" target="_blank" rel="noopener noreferrer">Rothschild & Co</a></div>

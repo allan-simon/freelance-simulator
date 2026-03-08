@@ -5,9 +5,9 @@ Synthèse des stratégies courantes recommandées par les cabinets d'expertise c
 ## 1. Arbitrage salaire vs dividendes
 
 ### Le principe
-Le salaire est soumis aux cotisations sociales (~43-45% patronales + ~28% salariales — le simulateur utilise 42% par simplification) mais ouvre des droits (retraite, prévoyance, chômage sous conditions). Les dividendes sont soumis à la flat tax (31,4%) mais n'ouvrent aucun droit social.
+Le salaire est soumis aux cotisations sociales (~38-39% patronales calculées par tranche + ~28% salariales) mais ouvre des droits (retraite, prévoyance, chômage sous conditions). Les dividendes sont soumis à la flat tax (31,4%) mais n'ouvrent aucun droit social.
 
-**Note** : le président de SASU ne bénéficie pas des taux réduits (maladie 7%, AF 3,45%) ni de la réduction Fillon → ses cotisations patronales sont plus élevées qu'un salarié classique.
+**Note** : le président de SASU ne bénéficie pas des taux réduits (maladie 7%, AF 3,45%) ni de la réduction Fillon → ses cotisations patronales sont plus élevées qu'un salarié classique (~30-32%).
 
 ### La stratégie courante
 - **Salaire "plancher"** : se verser un salaire suffisant pour valider 4 trimestres de retraite et avoir une couverture sociale décente. Minimum ~30-40k€ brut/an.

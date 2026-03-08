@@ -22,7 +22,6 @@ export const DEFAULTS = {
     divers: 1500
   },
   // Constantes réglementaires 2026
-  tauxPatronales: 0.45,
   tauxSalariales: 0.28,
   seuilIS: 100000,
   tauxISReduit: 0.15,
@@ -33,6 +32,53 @@ export const DEFAULTS = {
   partsFiscales: 2.5,
   ageActuel: 36,
 };
+
+// Cotisations patronales détaillées — président SASU (assimilé salarié cadre)
+// Le président ne bénéficie PAS du taux réduit maladie (7%) ni AF (3,45%) ni Fillon
+// Sources : CSS L241-1, L311-3 ; Legisocial ; sas-sasu.info
+export const PASS = 48060; // Plafond Annuel Sécu 2026
+
+// Taux sur la totalité du brut
+const TAUX_TOTALITE = {
+  maladie: 0.1300,        // 13% (pas 7% — mandataire social)
+  csa: 0.0030,            // contribution solidarité autonomie
+  vieillesseDepl: 0.0202, // vieillesse déplafonnée
+  af: 0.0525,             // allocations familiales (pas 3,45% — mandataire)
+  atmp: 0.0044,           // AT/MP (taux bureau/IT, variable selon code risque)
+  cet: 0.0021,            // contribution d'équilibre technique
+  apec: 0.00036,          // APEC cadre
+  formation: 0.0055,      // formation professionnelle (<11 salariés)
+  apprentissage: 0.0068,  // taxe d'apprentissage
+};
+// Total sur totalité : 22,55%
+
+// Taux sur tranche 1 uniquement (≤ PASS)
+const TAUX_T1 = {
+  vieillessePl: 0.0855,   // vieillesse plafonnée
+  fnal: 0.0010,           // FNAL (<50 salariés)
+  prevoyanceDeces: 0.0150, // prévoyance décès cadre (minimum conventionnel)
+  agircArrco: 0.0472,     // retraite complémentaire T1
+  ceg: 0.0129,            // contribution d'équilibre général T1
+};
+// Total T1 : 16,16%
+
+// Taux sur tranche 2 uniquement (> PASS, ≤ 8×PASS)
+const TAUX_T2 = {
+  agircArrco: 0.1295,     // retraite complémentaire T2
+  ceg: 0.0162,            // contribution d'équilibre général T2
+};
+// Total T2 : 14,57%
+
+const SUM_TOTALITE = Object.values(TAUX_TOTALITE).reduce((a, b) => a + b, 0);
+const SUM_T1 = Object.values(TAUX_T1).reduce((a, b) => a + b, 0);
+const SUM_T2 = Object.values(TAUX_T2).reduce((a, b) => a + b, 0);
+
+// Calcul exact des charges patronales par tranche
+export function computeChargesPatronales(salaireBrut) {
+  const t1 = Math.min(salaireBrut, PASS);
+  const t2 = Math.max(0, salaireBrut - PASS);
+  return salaireBrut * SUM_TOTALITE + t1 * SUM_T1 + t2 * SUM_T2;
+}
 
 export const RANGES = {
   tjm:    { min: 400, max: 2500, step: 50 },
@@ -47,11 +93,18 @@ export const RANGES = {
 // à partir des inputs step1 + step2
 export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
   const caHT = tjm * jours;
-  const coeff = 1 + DEFAULTS.tauxPatronales;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
-  const maxSalaireBrut = Math.floor((caHT - totalFraisHorsPer) / coeff / 5000) * 5000;
+  // Pour le max salaire, on cherche le brut tel que brut + charges(brut) ≤ disponible
+  // Approximation itérative : on part d'une estimation haute et on converge
+  const disponible = caHT - totalFraisHorsPer;
+  let maxBrut = disponible; // borne haute
+  for (let i = 0; i < 10; i++) {
+    maxBrut = disponible - computeChargesPatronales(maxBrut);
+  }
+  const maxSalaireBrut = Math.floor(Math.max(0, maxBrut) / 5000) * 5000;
   const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
-  const superbrut = salaireBrutEffectif * coeff;
+  const chargesP = computeChargesPatronales(salaireBrutEffectif);
+  const superbrut = salaireBrutEffectif + chargesP;
   const maxPer = Math.max(0, Math.floor((caHT - superbrut - totalFraisHorsPer) / 500) * 500);
   const perEffectif = Math.min(per, maxPer);
   const totalFrais = totalFraisHorsPer + perEffectif;
@@ -75,7 +128,7 @@ export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
 export function computeAll(params) {
   const {
     tjm, jours, salaireBrut, divNetsVoulus,
-    tauxPatronales, tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
+    tauxSalariales, seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
@@ -88,8 +141,8 @@ export function computeAll(params) {
   // --- Frais pro ---
   const totalFrais = Object.values(frais).reduce((a, b) => a + b, 0);
 
-  // --- Charges salaire ---
-  const chargesPatronales = salaireBrut * tauxPatronales;
+  // --- Charges salaire (calcul exact par tranche) ---
+  const chargesPatronales = computeChargesPatronales(salaireBrut);
   const superbrut = salaireBrut + chargesPatronales;
   const salaireNet = salaireBrut * (1 - tauxSalariales);
 

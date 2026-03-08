@@ -45,9 +45,14 @@ Le simulateur utilise **42%** comme approximation simplifiée. C'est légèremen
 - [sas-sasu.info — Charges sociales président SAS SASU](https://sas-sasu.info/charges-sociales-president-sas-sasu/)
 - [Legisocial — Taux cotisations URSSAF 2025](https://www.legisocial.fr/reperes-sociaux/taux-cotisations-sociales-urssaf-2025.html)
 
-**Impact** : 1 € de salaire brut coûte ~1,43-1,45 € à la société (superbrut). Le simulateur utilise 1,42 € par simplification.
+**Impact** : 1 € de salaire brut coûte ~1,38-1,39 € à la société (superbrut). Le simulateur calcule le taux exact par tranche (PASS).
 
-**⚠️ Limitation du simulateur** : le taux de 42% est une approximation. Pour un calcul exact, utiliser le [simulateur URSSAF](https://mon-entreprise.urssaf.fr/simulateurs/sasu) qui applique les vrais taux par tranche.
+Taux effectifs calculés par le simulateur :
+- 30k€ brut → 38,6% → superbrut 41 594 €
+- 48k€ brut (PASS) → 38,6% → superbrut 66 633 €
+- 60k€ brut → 38,3% → superbrut 82 998 €
+- 80k€ brut → 38,0% → superbrut 110 409 €
+- 100k€ brut → 37,8% → superbrut 137 820 €
 
 ## [2] Impôt sur les Sociétés (IS) 2026
 
@@ -191,7 +196,7 @@ Enveloppe d'investissement souscrite par la société (personne morale à l'IS).
 
 | Paramètre | Valeur 2026 | Texte de référence |
 |-----------|-------------|-------------------|
-| Cotisations patronales | ~43-45% du brut (simulateur : 42%) | CSS L241-1 et s. |
+| Cotisations patronales | ~38-39% du brut (calcul exact par tranche) | CSS L241-1 et s. |
 | Cotisations salariales | ~28% du brut | CSS L241-2, L241-3, L136-1-1 |
 | IS taux réduit | 15% (≤ 100k€) | CGI 219 I b |
 | IS taux normal | 25% (> 100k€) | CGI 219 I |
