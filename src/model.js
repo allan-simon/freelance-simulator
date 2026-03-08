@@ -128,13 +128,15 @@ export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
 }
 
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees }) {
+// Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees, inflation = 0 }) {
   let tc = 0, ts = 0, tp = 0, tpe = 0;
   for (let y = 1; y <= annees; y++) {
-    tc = tc * (1 + rendement) + contratCapi;
-    ts = ts * (1 + rendement) + scpi;
-    tp = tp * (1 + rendement) + peaPerso;
-    tpe = tpe * (1 + rendement) + per;
+    const infY = Math.pow(1 + inflation, y);
+    tc = tc * (1 + rendement) + contratCapi * infY;
+    ts = ts * (1 + rendement) + scpi * infY;
+    tp = tp * (1 + rendement) + peaPerso * infY;
+    tpe = tpe * (1 + rendement) + per * infY;
   }
   return tc + ts + tp + tpe + tresoSecurite;
 }
@@ -309,7 +311,7 @@ export function computeAll(params) {
   let cumCapi = 0, cumScpi = 0, cumPea = 0, cumPer = 0;
 
   // First pass: capital at ageObjectif for drawdown
-  const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees });
+  const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees, inflation });
 
   const anneesDrawdown = ageFin - ageObjectif;
   const drawdownAnnuelBrut = croquerCapital && anneesDrawdown > 0 && rendement > 0
@@ -337,11 +339,13 @@ export function computeAll(params) {
         label: "Freelance"
       });
     } else {
+      // Les contributions croissent avec l'inflation (le CA croît → le résultat croît → l'épargne croît)
+      const infY = Math.pow(1 + inflation, y);
       if (phase === 1) {
-        cumCapi = cumCapi * (1 + rendement) + contratCapi;
-        cumScpi = cumScpi * (1 + rendement) + scpi;
-        cumPea = cumPea * (1 + rendement) + peaPerso;
-        cumPer = cumPer * (1 + rendement) + per;
+        cumCapi = cumCapi * (1 + rendement) + contratCapi * infY;
+        cumScpi = cumScpi * (1 + rendement) + scpi * infY;
+        cumPea = cumPea * (1 + rendement) + peaPerso * infY;
+        cumPer = cumPer * (1 + rendement) + per * infY;
       } else if (croquerCapital) {
         const totalBefore = cumCapi + cumScpi + cumPea + cumPer;
         const growth = totalBefore * rendement;
@@ -365,7 +369,7 @@ export function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendement);
           cumScpi = cumScpi * (1 + rendement);
-          cumPea = cumPea * (1 + rendement) + 1200;
+          cumPea = cumPea * (1 + rendement) + 1200 * infY;
           cumPer = cumPer * (1 + rendement);
         } else {
           cumCapi = cumCapi * (1 + rendement);
@@ -453,6 +457,7 @@ export function computeAll(params) {
       tresoSecurite: nn / 12 * 6,
       rendement,
       annees,
+      inflation,
     });
     const revPassif = capitalFin * 0.04 * 0.7 / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
