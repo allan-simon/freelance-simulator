@@ -43,6 +43,7 @@ export const DEFAULTS = {
   // PS sur pensions de retraite (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
   psPension: 0.091,      // CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein, non exonéré)
   plafondAbattementPension: 4399, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, 2025)
+  plafondAbattementSalaire: 14171, // plafond abattement 10% salaires (CGI art. 83-3°, 2025)
   margeSecurite: 0.005, // marge 0,5 pt sur le taux de retrait (prudence vs rendements futurs incertains)
   seuilIS: 42500,
   tauxISReduit: 0.15,
@@ -334,6 +335,7 @@ export function computeAll(params) {
     fiscNettePea = DEFAULTS.fiscNettePea,
     psPension = DEFAULTS.psPension,
     plafondAbattementPension = DEFAULTS.plafondAbattementPension,
+    plafondAbattementSalaire = DEFAULTS.plafondAbattementSalaire,
     partDistribScpi = DEFAULTS.partDistribScpi,
     fraisEntreeScpi = DEFAULTS.fraisEntreeScpi,
     margeSecurite = DEFAULTS.margeSecurite,
@@ -391,11 +393,10 @@ export function computeAll(params) {
   const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
 
   // --- IR (barème 2025) ---
-  // NB : l'abattement 10% sur salaires est plafonné à 14 171 € (CGI art. 83-3°, 2025).
-  // Ici non plafonné : écart < 100 € d'IR pour un salaire brut de 60k. Marginal.
+  // Abattement 10% sur salaires, plafonné à 14 171 € (CGI art. 83-3°, 2025)
   const netImposable = computeNetImposable(salaireBrut);
-  const revenuImposableVous = netImposable * (1 - abattementIR);
-  const revenuImposableConjoint = revenuConjoint * (1 - abattementIR);
+  const revenuImposableVous = netImposable - Math.min(netImposable * abattementIR, plafondAbattementSalaire);
+  const revenuImposableConjoint = revenuConjoint - Math.min(revenuConjoint * abattementIR, plafondAbattementSalaire);
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
   const quotientFamilial = revenuImposableFoyer / partsFiscales;
 
