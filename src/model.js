@@ -176,7 +176,8 @@ function computeIR(quotientFamilial, parts = 2) {
   if (avantage > plafond) {
     // Plafonner : IR = IR sans demi-parts - plafond
     const irPlafonne = ir2 - plafond;
-    return { irParPart: irPlafonne / parts, tmi: result.tmi };
+    // TMI effective = celle du QF à 2 parts (c'est le barème qui s'applique réellement)
+    return { irParPart: irPlafonne / parts, tmi: computeIRBrut(qf2).tmi };
   }
   return result;
 }
@@ -773,45 +774,35 @@ export function computeAll(params) {
       const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rendementScpiDistrib : 0;
       const totalRevenuPlacements = forfaitAnnuel + revenuScpiAnnuel;
 
-      // Seuil IS partagé entre exploitation et placements :
-      // Phase 1 → le résultat d'exploitation consomme le seuil en priorité
-      // Phase 2 → missions ponctuelles + placements partagent le seuil
-      // Phase 3 → pas d'activité, seuil intégralement disponible pour les placements
+      // IS société : un seul résultat fiscal, un seul seuil IS (42 500 €)
+      // Phase 1 → résultat d'exploitation + placements
+      // Phase 2 → missions ponctuelles + placements
+      // Phase 3 → placements seuls
       const resultatMissionsY = phase === 2 ? resultatMissions * infY : 0;
-      if (phase === 1) {
-        seuilISRestant = Math.max(0, seuilIS - resultatAvantIS * infY);
-      } else if (phase === 2) {
-        // Missions + placements partagent le seuil IS
-        const totalIS2 = resultatMissionsY + totalRevenuPlacements;
-        seuilISRestant = Math.max(0, seuilIS - totalIS2);
-      } else {
-        seuilISRestant = seuilIS;
-      }
+      const resultatExploitationY = phase === 1 ? resultatAvantIS * infY : resultatMissionsY;
+      const totalResultatSociete = resultatExploitationY + totalRevenuPlacements;
+      const isTotalSociete = Math.min(totalResultatSociete, seuilIS) * tauxISReduit
+        + Math.max(0, totalResultatSociete - seuilIS) * tauxISNormal;
 
-      // IS sur placements : le seuil résiduel dépend du résultat d'exploitation (phase 1)
-      // ou des missions (phase 2) qui consomment le seuil en priorité
-      if (totalRevenuPlacements > 0) {
-        const seuilPourPlacements = phase === 1
-          ? Math.max(0, seuilIS - resultatAvantIS * infY)
-          : Math.max(0, seuilIS - resultatMissionsY);
-        const isPlacements = Math.min(totalRevenuPlacements, seuilPourPlacements) * tauxISReduit
-          + Math.max(0, totalRevenuPlacements - seuilPourPlacements) * tauxISNormal;
-        // Répartir l'IS au prorata entre capi et SCPI
+      // Répartir l'IS au prorata entre exploitation et placements
+      if (totalRevenuPlacements > 0 && totalResultatSociete > 0) {
+        const ratioPlacements = totalRevenuPlacements / totalResultatSociete;
+        const isPlacements = isTotalSociete * ratioPlacements;
         if (forfaitAnnuel > 0) {
           cumCapi = Math.max(0, cumCapi - isPlacements * (forfaitAnnuel / totalRevenuPlacements));
-          cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
+          cumForfaitsIS += forfaitAnnuel;
         }
         if (revenuScpiAnnuel > 0) {
           cumScpi = Math.max(0, cumScpi - isPlacements * (revenuScpiAnnuel / totalRevenuPlacements));
         }
       }
 
-      // Revenu missions phase 2 : recalculé avec le seuil IS résiduel après placements
-      // (les missions et placements partagent le même seuil IS de 42 500 €)
-      const seuilISApresPlacements = Math.max(0, seuilIS - totalRevenuPlacements);
-      const revenuMissionsNet = phase === 2
-        ? (resultatMissionsY - Math.min(resultatMissionsY, seuilISApresPlacements) * tauxISReduit
-           - Math.max(0, resultatMissionsY - seuilISApresPlacements) * tauxISNormal) * (1 - tauxFlatTax)
+      // Seuil IS résiduel (pour computeISOnAmount, utilisé par fiscalitePonderee)
+      seuilISRestant = Math.max(0, seuilIS - totalResultatSociete);
+
+      // Revenu net missions phase 2 : IS au prorata du résultat total
+      const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax)
         : 0;
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
