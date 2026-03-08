@@ -13,6 +13,7 @@ export const DEFAULTS = {
   rendementCapi: 0.06,  // contrat capi lux, FID actions diversifié — net de frais assureur (~0,5%)
   rendementScpi: 0.045, // SCPI, rendement total (distribution + revalorisation parts) — net de frais de gestion
   partDistribScpi: 0.89, // ~4% distribution sur 4,5% total → 89% (seule la distribution est imposable à l'IS)
+  fraisEntreeScpi: 0.10, // frais de souscription SCPI (~8-12%, typiquement 10%) — prélevés sur chaque versement
   rendementPea:  0.07,  // PEA, ETF actions — net de TER (~0,2%) et frais courtier
   rendementPer:  0.05,  // PER, allocation mixte/défensive — net de frais assureur (~0,5%, PER en ligne)
   ageObjectif: 50,
@@ -323,6 +324,7 @@ export function computeAll(params) {
     psPension = DEFAULTS.psPension,
     plafondAbattementPension = DEFAULTS.plafondAbattementPension,
     partDistribScpi = DEFAULTS.partDistribScpi,
+    fraisEntreeScpi = DEFAULTS.fraisEntreeScpi,
     margeSecurite = DEFAULTS.margeSecurite,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
@@ -440,6 +442,7 @@ export function computeAll(params) {
   const reserveTreso = resteSASU * ratioTreso;
   const contratCapi = resteSASU * ratioCapi;
   const scpi = resteSASU * ratioScpi;
+  const scpiNet = scpi * (1 - fraisEntreeScpi); // montant effectivement investi après frais de souscription
   const peaPerso = 2400;
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
@@ -480,7 +483,7 @@ export function computeAll(params) {
   const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
   const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime) };
   const rendements = { rendementCapi, rendementScpi, rendementPea, rendementPer };
-  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
+  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
   // projHorsPer calculé plus bas (rendement pondéré) — on y extrait aussi capitalHorsPerAtObjectif
   let capitalHorsPerAtObjectif;
@@ -495,7 +498,7 @@ export function computeAll(params) {
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
   // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
-  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
 
@@ -539,7 +542,7 @@ export function computeAll(params) {
   // - SCPI : IS sur les distributions (loyers) = rendementDistrib × valeur → drag direct
   // - PEA : pas de drag fiscal annuel (PS uniquement au retrait, > 5 ans)
   // Pondération par les encours estimés à l'objectif (pas les ratios d'allocation initiale)
-  const projHorsPer = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs });
+  const projHorsPer = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs });
   capitalHorsPerAtObjectif = projHorsPer.total;
   const vCapi = projHorsPer.capiValue, vScpi = projHorsPer.scpiValue, vPea = projHorsPer.peaValue;
   const totalHorsPer = vCapi + vScpi + vPea;
@@ -602,7 +605,7 @@ export function computeAll(params) {
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
   // Estimation headline (encours à ageObjectif) — la boucle recalcule fiscPondRetrait chaque année
   // avec les encours réels (la composition du portefeuille évolue pendant le drawdown)
-  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpi, peaPerso, per);
+  const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpiNet, peaPerso, per);
   const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
@@ -635,7 +638,7 @@ export function computeAll(params) {
       if (phase === 1) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
-        cumScpi = cumScpi * (1 + rendementScpi) + scpi * infY;
+        cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
         cumPea = cumPea * (1 + rendementPea) + peaPerso * infY;
         cumPer = cumPer * (1 + rendementPer) + per * infY;
       } else if (croquerCapital) {
@@ -826,7 +829,7 @@ export function computeAll(params) {
     const reste = benefDistribuable - db;
     const projScenario = computeCapitalProjection({
       contratCapi: reste * ratioCapi,
-      scpi: reste * ratioScpi,
+      scpi: reste * ratioScpi * (1 - fraisEntreeScpi),
       peaPerso,
       per,
       ...rendements,
@@ -835,7 +838,7 @@ export function computeAll(params) {
       ...projArgs,
     });
     const capitalFin = projScenario.total;
-    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi, peaPerso, per);
+    const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi * (1 - fraisEntreeScpi), peaPerso, per);
     const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - margeSecurite);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
