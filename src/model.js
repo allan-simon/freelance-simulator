@@ -13,7 +13,9 @@ export const DEFAULTS = {
   rendementCapi: 0.06,  // contrat capi lux, FID actions diversifié — net de frais assureur (~0,5%)
   rendementScpi: 0.045, // SCPI, rendement total (distribution + revalorisation parts) — net de frais de gestion
   partDistribScpi: 0.89, // ~4% distribution sur 4,5% total → 89% (seule la distribution est imposable à l'IS)
-  fraisEntreeScpi: 0.10, // frais de souscription SCPI (~8-12%, typiquement 10%) — prélevés sur chaque versement
+  // Frais de souscription SCPI (~8-12%, médiane 10%) — prélevés sur chaque versement
+  // Sources : francescpi.com/scpi/questions-frequentes-scpi-faq/les-frais-SCPI, louveinvest.com/frais-scpi
+  fraisEntreeScpi: 0.10,
   rendementPea:  0.07,  // PEA, ETF actions — net de TER (~0,2%) et frais courtier
   rendementPer:  0.05,  // PER, allocation mixte/défensive — net de frais assureur (~0,5%, PER en ligne)
   ageObjectif: 50,
