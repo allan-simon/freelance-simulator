@@ -572,7 +572,7 @@ export default function App() {
             <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · ${partsFiscales} parts [5]`} />
             <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
             <div style={{ margin: '8px 0 4px', padding: '8px 12px', background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <Slider label="PEA (épargne depuis compte perso)" value={peaPerso} onChange={setPeaPerso} min={0} max={12000} step={600} />
+              <Slider label="PEA (épargne depuis compte perso)" value={peaPerso} onChange={setPeaPerso} min={0} max={18000} step={600} />
               <div style={{ fontSize: 11, color: '#718096', marginTop: -8, fontStyle: 'italic' }}>
                 {fmt(Math.round(peaPerso / 12))} /mois — plus-values exonérées d'IR après 5 ans
               </div>
