@@ -332,10 +332,11 @@ export function computeAll(params) {
 
   let irParPart = 0;
   let tmi = 0;
-  for (let i = tranches.length - 1; i >= 1; i--) {
-    const trancheRevenu = Math.max(0, quotientFamilial - tranches[i].seuil);
-    irParPart += trancheRevenu * tranches[i].taux;
-    if (trancheRevenu > 0 && tmi === 0) tmi = tranches[i].taux;
+  for (let i = 1; i < tranches.length; i++) {
+    const plafond = i < tranches.length - 1 ? tranches[i + 1].seuil : Infinity;
+    const base = Math.max(0, Math.min(quotientFamilial, plafond) - tranches[i].seuil);
+    irParPart += base * tranches[i].taux;
+    if (base > 0) tmi = tranches[i].taux;
   }
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
@@ -628,8 +629,9 @@ export function computeAll(params) {
   const cdiImposable = cdiNetImposable * (1 - abattementIR);
   const cdiQF = (cdiImposable + revenuConjoint * (1 - abattementIR)) / partsFiscales;
   let cdiIRParPart = 0;
-  for (let i = tranches.length - 1; i >= 1; i--) {
-    cdiIRParPart += Math.max(0, cdiQF - tranches[i].seuil) * tranches[i].taux;
+  for (let i = 1; i < tranches.length; i++) {
+    const plafond = i < tranches.length - 1 ? tranches[i + 1].seuil : Infinity;
+    cdiIRParPart += Math.max(0, Math.min(cdiQF, plafond) - tranches[i].seuil) * tranches[i].taux;
   }
   const cdiIRFoyer = cdiIRParPart * partsFiscales;
   const cdiImposableFoyer = cdiImposable + revenuConjoint * (1 - abattementIR);

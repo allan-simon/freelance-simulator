@@ -11,6 +11,26 @@ const fmtK = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M €` : `${Math.ro
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 
+function NumberInput({ label, value, onChange, min = 0, max = Infinity, step = 1, suffix = "" }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+  const commit = (v) => { const n = Math.max(min, Math.min(max, Number(v) || 0)); onChange(n); setText(String(n)); };
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={{ fontSize: 13, color: '#4a5568', fontFamily: "'DM Sans', sans-serif", display: 'block', marginBottom: 4 }}>{label}</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input type="number" min={min} max={max} step={step} value={text}
+          onChange={e => setText(e.target.value)}
+          onBlur={e => commit(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && commit(e.target.value)}
+          style={{ width: '100%', padding: '6px 10px', fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+            color: '#1a365d', border: '1px solid #cbd5e0', borderRadius: 6, background: '#fff' }} />
+        {suffix && <span style={{ fontSize: 13, color: '#4a5568', whiteSpace: 'nowrap' }}>{suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
 function Slider({ label, value, onChange, min, max, step, format = "money", suffix = "", note }) {
   const display = format === "money" ? fmt(value) : format === "pct" ? fmtPct(value) : `${value}${suffix}`;
   return (
@@ -190,6 +210,7 @@ function getUrlParams() {
     ratioTreso: num('ratioTreso', DEFAULTS.ratioTreso),
     ratioCapi: num('ratioCapi', DEFAULTS.ratioCapi),
     inflation: num('inflation', DEFAULTS.inflation),
+    partsFiscales: num('partsFiscales', DEFAULTS.partsFiscales),
   };
 }
 
@@ -215,6 +236,7 @@ export default function App() {
   const [ratioTreso, setRatioTreso] = useState(INIT.ratioTreso);
   const [ratioCapi, setRatioCapi] = useState(INIT.ratioCapi);
   const [inflation, setInflation] = useState(INIT.inflation);
+  const [partsFiscales, setPartsFiscales] = useState(INIT.partsFiscales);
 
   const [frais] = useState(DEFAULTS.frais);
   const caHT = tjm * jours;
@@ -233,10 +255,10 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendement, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi, salaireBrutCDI, inflation
+    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -259,10 +281,11 @@ export default function App() {
     set('ratioTreso', ratioTreso, DEFAULTS.ratioTreso);
     set('ratioCapi', ratioCapi, DEFAULTS.ratioCapi);
     set('inflation', inflation, DEFAULTS.inflation);
+    set('partsFiscales', partsFiscales, DEFAULTS.partsFiscales);
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -480,7 +503,13 @@ export default function App() {
             <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
             <Row label="Prélèvement forfaitaire unique (flat tax 31,4%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]" />
             <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
-            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · 2,5 parts [5]`} />
+            <div style={{ margin: '8px 0 4px', padding: '8px 12px', background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Slider label="Parts fiscales du foyer" value={partsFiscales} onChange={setPartsFiscales} min={1} max={5} step={0.5} format="num" suffix=" parts" />
+              <div style={{ fontSize: 11, color: '#718096', marginTop: -8, fontStyle: 'italic' }}>
+                1 = célibataire · 2 = couple · +0,5 par enfant (×1 à partir du 3e)
+              </div>
+            </div>
+            <Row label="Impôt sur le revenu (votre part du foyer)" value={`- ${fmt(r.votreIR)}`} sub={`TMI ${fmtPct(r.tmi)} · quotient familial ${fmt(r.quotientFamilial)} · ${partsFiscales} parts [5]`} />
             <Row label="Chèques-vacances ANCV" value={`+ ${fmt(frais.chequesVacances)}`} sub="exonéré d'IR et de cotisations sociales [6]" />
             <Row label="PEA (épargne depuis compte perso)" value={`- ${fmt(r.peaPerso)}`} sub="200 €/mois — plus-values exonérées d'IR après 5 ans" />
             <Row label="Net net annuel" value={fmt(r.netNetAnnuel)} bold highlight sub="total à consommer sur l'année, après épargne PEA" />
@@ -529,7 +558,7 @@ export default function App() {
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
-            <Slider label="Salaire brut moyen CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={25000} max={80000} step={5000} format="money" />
+            <NumberInput label="Salaire brut moyen CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={0} max={200000} step={1000} suffix="€" />
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ padding: '10px 16px', background: croquerCapital ? '#fff5f5' : '#f0fff4',
