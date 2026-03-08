@@ -192,6 +192,47 @@ Enveloppe d'investissement souscrite par la société (personne morale à l'IS).
 
 **Impact** : véhicule principal de capitalisation (65% du reste SASU par défaut). Rendement typique 4-7% selon allocation.
 
+## [10] Estimation retraite (base + complémentaire AGIRC-ARRCO)
+
+Le simulateur estime la pension de retraite à 67 ans (taux plein automatique) en deux composantes :
+
+### Retraite de base (régime général)
+- **SAM** (Salaire Annuel Moyen) = moyenne des 25 meilleures années, plafonnées au PASS
+- **Pension mensuelle** = SAM × 50% × min(1, trimestres cotisés / 172) / 12
+- Trimestres requis : **172** (43 ans) pour les générations ~1990
+- 4 trimestres validés par an si salaire annuel ≥ 600 SMIC horaire (~6 990 €)
+- À 67 ans : taux plein automatique (50%), mais le prorata durée s'applique toujours
+
+### Retraite complémentaire AGIRC-ARRCO
+- **Taux de calcul des points** (taux contractuel, hors coefficient d'appel 127%) :
+  - Tranche 1 (≤ PASS) : **6,20%**
+  - Tranche 2 (> PASS, ≤ 8×PASS) : **17,00%**
+- **Prix d'achat du point** (2024) : **19,6321 €**
+- **Valeur de service du point** (2024) : **1,4159 €**
+- Points par an = salaire_T1 × 6,20% / 19,6321 + salaire_T2 × 17,00% / 19,6321
+- Pension complémentaire mensuelle = total points × 1,4159 / 12
+
+### Hypothèses du simulateur
+- Début de carrière à **22 ans** (déduit de l'âge actuel)
+- Avant freelance : salaire brut CDI configurable (défaut 45 000 €)
+- Pendant freelance : salaire brut SASU (paramètre existant)
+- Pas de cotisation après `ageObjectif` (arrêt d'activité)
+- Pas de malus temporaire AGIRC-ARRCO (supprimé depuis 2023 pour départ à 67 ans)
+
+**Sources primaires :**
+- [CSS art. R351-29](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006750419) — calcul du SAM (25 meilleures années)
+- [CSS art. L351-1](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006742476) — pension de base, taux plein à 67 ans
+- [CSS art. R351-27](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006750415) — durée d'assurance requise (172 trimestres)
+- [ANI du 17/11/2017](https://www.agirc-arrco.fr/fileadmin/agircarrco/documents/conventions-accords/ANI_17-11-2017.pdf) — régime unifié AGIRC-ARRCO
+
+**Sources secondaires :**
+- [Service Public — Calcul pension retraite base](https://www.service-public.fr/particuliers/vosdroits/F21552)
+- [CNAV — Salaire annuel moyen](https://www.legislation.cnav.fr/Pages/bareme.aspx?Nom=salaire_annuel_moyen_702)
+- [AGIRC-ARRCO — Valeur du point](https://www.agirc-arrco.fr/mes-services-particuliers/les-experts-retraite/valeur-du-point/)
+- [Service Public — Durée d'assurance requise](https://www.service-public.fr/particuliers/vosdroits/F35063)
+
+**Impact** : pour un profil CDI 45k€ (14 ans) + SASU 60k€ (14 ans), estimation ~1 920 €/mois à 67 ans. La pension réagit au salaire brut CDI, au salaire brut SASU, à l'âge actuel et à l'âge objectif.
+
 ## Résumé des taux clés
 
 | Paramètre | Valeur 2026 | Texte de référence |
@@ -206,3 +247,7 @@ Enveloppe d'investissement souscrite par la société (personne morale à l'IS).
 | Âge légal retraite | 64 ans | Loi 2023-270 art. 10 |
 | Chèques-vacances | 546,91 €/an exonérés (hors CSG/CRDS) | Code tourisme L411-1 |
 | Capi lux fiscalité IS | 105% TME | CGI 238 septies E |
+| Retraite base | SAM × 50% × prorata | CSS L351-1, R351-29 |
+| AGIRC-ARRCO point achat | 19,6321 € (2024) | ANI 17/11/2017 |
+| AGIRC-ARRCO point service | 1,4159 € (2024) | ANI 17/11/2017 |
+| Trimestres requis (~1990) | 172 (43 ans) | CSS R351-27 |

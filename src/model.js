@@ -14,6 +14,7 @@ export const DEFAULTS = {
   croquerCapital: false,
   ageFin: 80,
   per: 5000,
+  salaireBrutCDI: 45000,
   ratioTreso: 0.15,
   ratioCapi: 0.65,
   frais: {
@@ -136,6 +137,74 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tre
   return tc + ts + tp + tpe + tresoSecurite;
 }
 
+// Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
+// Hypothèses : début carrière à 22 ans, taux plein à 67 ans, pas de cotisation après ageObjectif
+// Sources :
+//   - Pension base : SAM × 50% × prorata — service-public.fr/particuliers/vosdroits/F21552
+//   - SAM (25 meilleures années plafonnées PASS) — legislation.cnav.fr
+//   - Points AGIRC-ARRCO : taux calcul T1=6,20%, T2=17,00% — agirc-arrco.fr
+//   - Prix achat point 2024 : 19,6321 € — Valeur service : 1,4159 € — agirc-arrco.fr
+//   - Trimestres requis génération ~1990 : 172 (43 ans) — service-public.fr/particuliers/vosdroits/F35063
+export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif }) {
+  const AGE_DEBUT = 22;
+  const AGE_RETRAITE = 67;
+  const TRIMESTRES_REQUIS = 172; // génération ~1990
+  const PASS_RET = PASS; // plafond annuel sécu
+
+  const anneesCDI = Math.max(0, ageActuel - AGE_DEBUT);
+  const anneesFreelance = Math.max(0, Math.min(ageObjectif, AGE_RETRAITE) - ageActuel);
+  const totalAnnees = anneesCDI + anneesFreelance;
+  const trimestres = Math.min(totalAnnees * 4, TRIMESTRES_REQUIS);
+
+  // SAM : 25 meilleures années, salaires plafonnés au PASS
+  const salCDI = Math.min(salaireBrutCDI, PASS_RET);
+  const salFL = Math.min(salaireBrut, PASS_RET);
+
+  let sam;
+  if (totalAnnees <= 0) {
+    sam = 0;
+  } else if (totalAnnees <= 25) {
+    sam = (anneesCDI * salCDI + anneesFreelance * salFL) / totalAnnees;
+  } else {
+    // Prendre les 25 meilleures années
+    const years = [];
+    for (let i = 0; i < anneesCDI; i++) years.push(salCDI);
+    for (let i = 0; i < anneesFreelance; i++) years.push(salFL);
+    years.sort((a, b) => b - a);
+    sam = years.slice(0, 25).reduce((a, b) => a + b, 0) / 25;
+  }
+
+  // Pension de base : SAM × 50% × prorata trimestres
+  const prorata = Math.min(1, trimestres / TRIMESTRES_REQUIS);
+  const retraiteBaseMois = Math.round(sam * 0.50 * prorata / 12);
+
+  // Complémentaire AGIRC-ARRCO
+  // Taux de calcul des points (taux contractuel, hors appel)
+  const TAUX_T1 = 0.0620;  // tranche 1 (≤ PASS)
+  const TAUX_T2 = 0.1700;  // tranche 2 (> PASS, ≤ 8×PASS)
+  const PRIX_POINT = 19.6321;  // prix d'achat 2024
+  const VALEUR_POINT = 1.4159; // valeur de service 2024
+
+  let totalPoints = 0;
+  // Points CDI
+  const t1c = Math.min(salaireBrutCDI, PASS_RET);
+  const t2c = Math.max(0, Math.min(salaireBrutCDI, 8 * PASS_RET) - PASS_RET);
+  totalPoints += anneesCDI * (t1c * TAUX_T1 + t2c * TAUX_T2) / PRIX_POINT;
+
+  // Points freelance (SASU)
+  const t1f = Math.min(salaireBrut, PASS_RET);
+  const t2f = Math.max(0, Math.min(salaireBrut, 8 * PASS_RET) - PASS_RET);
+  totalPoints += anneesFreelance * (t1f * TAUX_T1 + t2f * TAUX_T2) / PRIX_POINT;
+
+  const retraiteCompMois = Math.round(totalPoints * VALEUR_POINT / 12);
+
+  return {
+    retraiteBaseMois,
+    retraiteCompMois,
+    retraiteTotaleMois: retraiteBaseMois + retraiteCompMois,
+  };
+}
+
 // Moteur principal — IDENTIQUE à ce qui tourne dans l'UI
 export function computeAll(params) {
   const {
@@ -144,7 +213,8 @@ export function computeAll(params) {
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     frais, rendement, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50,
-    ratioTreso = 0.15, ratioCapi = 0.65
+    ratioTreso = 0.15, ratioCapi = 0.65,
+    salaireBrutCDI = 45000
   } = params;
 
   // --- CA ---
@@ -228,9 +298,7 @@ export function computeAll(params) {
   // --- Projection COMPLÈTE ageActuel → ageFin ---
   const annees = ageObjectif - ageActuel;
   const ageRetraite = 67;
-  const retraiteBaseMois = 1400;
-  const retraiteCompMois = 900;
-  const retraiteTotaleMois = retraiteBaseMois + retraiteCompMois;
+  const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif });
   const joursMissionsPonctuelles = joursLeverLePied;
   const revenuMissionsAnnuel = tjm * joursMissionsPonctuelles * 0.45;
 
@@ -399,7 +467,7 @@ export function computeAll(params) {
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
-export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, r }) {
+export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r }) {
   const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendement ${rendement} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
 
   const L = [];

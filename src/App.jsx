@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { computeAll, computeChargesPatronales, computeConstraints, DEFAULTS, formatReport } from "./model.js";
 
@@ -183,6 +183,7 @@ function getUrlParams() {
     croquerCapital: bool('croquerCapital', DEFAULTS.croquerCapital),
     ageFin: num('ageFin', DEFAULTS.ageFin),
     per: num('per', DEFAULTS.per),
+    salaireBrutCDI: num('salaireBrutCDI', DEFAULTS.salaireBrutCDI),
     ratioTreso: num('ratioTreso', DEFAULTS.ratioTreso),
     ratioCapi: num('ratioCapi', DEFAULTS.ratioCapi),
   };
@@ -206,6 +207,7 @@ export default function App() {
   const [croquerCapital, setCroquerCapital] = useState(INIT.croquerCapital);
   const [ageFin, setAgeFin] = useState(INIT.ageFin);
   const [per, setPer] = useState(INIT.per);
+  const [salaireBrutCDI, setSalaireBrutCDI] = useState(INIT.salaireBrutCDI);
   const [ratioTreso, setRatioTreso] = useState(INIT.ratioTreso);
   const [ratioCapi, setRatioCapi] = useState(INIT.ratioCapi);
 
@@ -226,19 +228,53 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendement, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi
+    ratioTreso, ratioCapi, salaireBrutCDI
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendement, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
+
+  // Sync URL avec tous les paramètres pour partage
+  useEffect(() => {
+    const p = new URLSearchParams();
+    const set = (k, v, def) => { if (v !== def) p.set(k, v); };
+    set('tjm', tjm, DEFAULTS.tjm);
+    set('jours', jours, DEFAULTS.jours);
+    set('salaireBrut', salaireBrut, DEFAULTS.salaireBrut);
+    set('divNetsVoulus', divNetsVoulus, DEFAULTS.divNetsVoulus);
+    set('rendement', rendement, DEFAULTS.rendement);
+    set('ageActuel', ageActuel, DEFAULTS.ageActuel);
+    set('ageObjectif', ageObjectif, DEFAULTS.ageObjectif);
+    set('joursLeverLePied', joursLeverLePied, DEFAULTS.joursLeverLePied);
+    set('croquerCapital', croquerCapital, DEFAULTS.croquerCapital);
+    set('ageFin', ageFin, DEFAULTS.ageFin);
+    set('per', per, DEFAULTS.per);
+    set('salaireBrutCDI', salaireBrutCDI, DEFAULTS.salaireBrutCDI);
+    set('ratioTreso', ratioTreso, DEFAULTS.ratioTreso);
+    set('ratioCapi', ratioCapi, DEFAULTS.ratioCapi);
+    const qs = p.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, '', url);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendement, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, per, salaireBrutCDI, ratioTreso, ratioCapi]);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Simulateur Freelance SASU', url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const [copied, setCopied] = useState(false);
   const handleCopyLLM = () => {
     const text = '```\n' + formatReport({
       tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
       divNetsVoulus: divNetsEffectif, rendement, ageActuel, ageObjectif, joursLeverLePied,
-      croquerCapital, ageFin, ratioTreso, ratioCapi, r
+      croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r
     }) + '\n```';
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -264,15 +300,26 @@ export default function App() {
                   textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }} /> ans · Toutes formules vérifiables
             </p>
           </div>
-          <button onClick={handleCopyLLM} style={{
-            background: copied ? '#38a169' : 'rgba(255,255,255,0.15)',
-            color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
-            borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-            transition: 'all 0.2s',
-          }}>
-            {copied ? 'Copié !' : 'Copy to LLM'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleCopyLLM} style={{
+              background: copied ? '#38a169' : 'rgba(255,255,255,0.15)',
+              color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              transition: 'all 0.2s',
+            }}>
+              {copied ? 'Copié !' : 'Copy to LLM'}
+            </button>
+            <button onClick={handleShare} style={{
+              background: 'rgba(255,255,255,0.15)',
+              color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              transition: 'all 0.2s',
+            }}>
+              Partager
+            </button>
+          </div>
         </div>
       </div>
 
@@ -474,6 +521,7 @@ export default function App() {
             <Slider label="Rendement placements" value={rendement} onChange={setRendement} min={0.02} max={0.10} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
+            <Slider label="Salaire brut moyen CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={25000} max={80000} step={5000} format="money" />
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ padding: '10px 16px', background: croquerCapital ? '#fff5f5' : '#f0fff4',
@@ -574,7 +622,8 @@ export default function App() {
             </table>
           </div>
           <div style={{ marginTop: 12, fontSize: 11, color: '#a0aec0' }}>
-            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois (estimé, 60k brut SASU + années CDI)
+            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire AGIRC-ARRCO : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois — estimé sur {ageActuel - 22} ans CDI à {fmt(salaireBrutCDI)} brut + {ageObjectif - ageActuel} ans SASU à {fmt(params.salaireBrut)} brut, taux plein à 67 ans.
+            Sources : <a href="https://www.legislation.cnav.fr/Pages/bareme.aspx?Nom=salaire_annuel_moyen_702" target="_blank" rel="noopener" style={{ color: '#718096' }}>SAM (CNAV)</a> · <a href="https://www.agirc-arrco.fr/mes-services-particuliers/les-experts-retraite/valeur-du-point/" target="_blank" rel="noopener" style={{ color: '#718096' }}>Points AGIRC-ARRCO</a> · <a href="https://www.service-public.fr/particuliers/vosdroits/F21552" target="_blank" rel="noopener" style={{ color: '#718096' }}>Calcul pension base</a>
           </div>
         </Card>
 
