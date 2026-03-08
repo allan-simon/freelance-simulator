@@ -437,8 +437,24 @@ export function computeAll(params) {
   let drawdownAnnuelBrutAvant64 = 0;
   let drawdownAnnuelBrutApres64 = 0;
 
-  // Annuité en taux réel → versements constants en pouvoir d'achat (nominaux croissants avec l'inflation)
-  const tauxReel = Math.max(0.001, rendement - inflation);
+  // Rendement net du drag fiscal annuel sur le capital :
+  // - Contrat capi : forfait TME (105% × TME × tauxIS sur les versements nets)
+  //   → drag ≈ forfaitTME × tauxISEffectif × (base/valeur), approximé par un ratio moyen
+  // - SCPI : IS sur les revenus fonciers (rendement quasi-entièrement distribué)
+  //   → drag ≈ rendement × tauxISEffectif × (part SCPI / total)
+  // - PEA : pas de drag fiscal annuel (PS uniquement au retrait)
+  // On estime le drag moyen pondéré pour la formule d'annuité :
+  const ratioScpiEst = Math.max(0, 1 - ratioTreso - ratioCapi);
+  const totalCapiScpi = ratioCapi + ratioScpiEst;
+  const partCapi = totalCapiScpi > 0 ? ratioCapi / totalCapiScpi : 1; // fallback sans impact (drag × 0 = 0)
+  const partScpi = 1 - partCapi;
+  const dragFiscalCapi = forfaitTME * tauxISEffectif; // ~0.9% sur la base (pas sur la valeur), approximé
+  const dragFiscalScpi = rendement * tauxISEffectif;  // IS sur les revenus fonciers
+  const dragFiscalMoyen = partCapi * dragFiscalCapi + partScpi * dragFiscalScpi;
+  const rendementNetDrag = Math.max(0, rendement - dragFiscalMoyen);
+
+  // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
+  const tauxReel = Math.max(0.001, rendementNetDrag - inflation);
 
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
   // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
@@ -461,12 +477,13 @@ export function computeAll(params) {
       // Phase 2 : à 64 ans, sortie PER en capital fractionné (art. L224-1 CMF) → rejoint le pool
       if (anneesApres64 > 0) {
         // Le PER a grossi (contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64)
+        // PER : pas de drag fiscal en phase capitalisation
         let perAt64 = poolPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendement);
-        // Capital hors PER restant — simuler les retraits indexés sur l'inflation
+        // Capital hors PER (capi + SCPI) : croît au rendement net du drag fiscal IS
         let soldeHorsPer = poolHorsPerAvantRetrait;
         for (let i = 0; i < anneesAvant64; i++) {
-          soldeHorsPer = soldeHorsPer * (1 + rendement) - drawdownAnnuelBrutAvant64 * Math.pow(1 + inflation, i);
+          soldeHorsPer = soldeHorsPer * (1 + rendementNetDrag) - drawdownAnnuelBrutAvant64 * Math.pow(1 + inflation, i);
         }
         soldeHorsPer = Math.max(0, soldeHorsPer);
         const capitalTotal64 = soldeHorsPer + perAt64;
@@ -476,6 +493,8 @@ export function computeAll(params) {
   }
   // Pour la compatibilité : drawdownAnnuelBrut est celui de la première phase
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
+  // Estimation headline (encours à ageObjectif) — la boucle recalcule fiscPondRetrait chaque année
+  // avec les encours réels (la composition du portefeuille évolue pendant le drawdown)
   const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, scpi, peaPerso, per);
   const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
@@ -578,13 +597,18 @@ export function computeAll(params) {
         }
       }
 
-      // Forfait IS annuel sur contrat capi (CGI 238 septies E) : 105% TME × versements nets
-      // Payé chaque année par la société, déduit de la valeur du contrat
+      // Drag fiscal annuel sur le capital détenu par la SASU :
+      // 1) Contrat capi : forfait IS (CGI 238 septies E) = 105% TME × versements nets
       if (cumCapiBase > 0) {
         const forfaitAnnuel = cumCapiBase * forfaitTME;
         const isForfait = forfaitAnnuel * tauxISEffectif;
         cumCapi = Math.max(0, cumCapi - isForfait);
         cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
+      }
+      // 2) SCPI : IS sur les revenus fonciers (le rendement SCPI est quasi-entièrement distribué)
+      if (cumScpi > 0) {
+        const revenuScpiAnnuel = cumScpi * rendement;
+        cumScpi = Math.max(0, cumScpi - revenuScpiAnnuel * tauxISEffectif);
       }
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
