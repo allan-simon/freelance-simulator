@@ -306,7 +306,7 @@ Le simulateur estime la pension de retraite à 67 ans (taux plein automatique) e
 | Paramètre | Valeur 2026 | Texte de référence |
 |-----------|-------------|-------------------|
 | Cotisations patronales | ~38-39% du brut (calcul exact par tranche) | CSS L241-1 et s. |
-| Cotisations salariales | ~28% du brut | CSS L241-2, L241-3, L136-1-1 |
+| Cotisations salariales | ~21% du brut (CSG/CRDS incluse) | CSS L241-2, L241-3, L136-1-1 |
 | IS taux réduit | 15% (≤ 42 500 €) | CGI 219 I b |
 | IS taux normal | 25% (> 42 500 €) | CGI 219 I |
 | Flat tax (PFU) | 31,4% | CGI 200 A + CSS L136-7 |

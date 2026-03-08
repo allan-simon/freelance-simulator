@@ -247,6 +247,8 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 //   - SAM (25 meilleures années plafonnées PASS) — legislation.cnav.fr
 //   - Points AGIRC-ARRCO : taux calcul T1=6,20%, T2=17,00% — agirc-arrco.fr
 //   - Prix achat point 2024 : 19,6321 € — Valeur service : 1,4159 € — agirc-arrco.fr
+//     NB : valeurs figées — en réalité le prix d'achat croît plus vite que la valeur de service,
+//     érodant le rendement de la complémentaire. Le modèle est légèrement optimiste.
 //   - Trimestres requis génération ~1990 : 172 (43 ans) — service-public.fr/particuliers/vosdroits/F35063
 export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif }) {
   const AGE_DEBUT = 22;
