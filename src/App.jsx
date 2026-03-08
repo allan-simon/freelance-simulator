@@ -698,8 +698,11 @@ export default function App() {
                 <div style={{ fontSize: 10, color: '#718096', marginBottom: 6 }}>{s.sub}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: '#1a365d', fontFamily: "'JetBrains Mono', monospace" }}>
                   {fmt(inflation > 0 ? s.reel : s.value)}
-                  <span style={{ fontSize: 10, fontWeight: 400, color: '#718096' }}>/mois{inflation > 0 ? ` (€ ${new Date().getFullYear()})` : ''}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, color: '#718096' }}>/mois</span>
                 </div>
+                {inflation > 0 && (
+                  <div style={{ fontSize: 9, color: '#718096', marginTop: 1 }}>en € {new Date().getFullYear()}</div>
+                )}
                 {inflation > 0 && s.reel !== s.value && (
                   <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
                     {fmt(s.value)} nominal
