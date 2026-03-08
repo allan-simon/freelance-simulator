@@ -39,6 +39,7 @@ export const DEFAULTS = {
   // PS sur pensions de retraite (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
   psPension: 0.091,      // CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein, non exonéré)
   plafondAbattementPension: 4399, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, 2025)
+  margeSecurite: 0.005, // marge 0,5 pt sur le taux de retrait (prudence vs rendements futurs incertains)
   seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
@@ -322,6 +323,7 @@ export function computeAll(params) {
     psPension = DEFAULTS.psPension,
     plafondAbattementPension = DEFAULTS.plafondAbattementPension,
     partDistribScpi = DEFAULTS.partDistribScpi,
+    margeSecurite = DEFAULTS.margeSecurite,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
@@ -559,7 +561,7 @@ export function computeAll(params) {
   // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
   // Marge 0,5 point (même prudence que le mode rente perpétuelle) : le mode croquer capital
   // est plus risqué (capital à zéro si les rendements déçoivent) → au moins aussi prudent
-  const tauxReel = Math.max(0.001, rendementNetDrag - inflation - 0.005);
+  const tauxReel = Math.max(0.001, rendementNetDrag - inflation - margeSecurite);
 
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
   // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
@@ -741,7 +743,7 @@ export function computeAll(params) {
       // SWR prudent : rendement réel net du drag IS, moins 0.5 point de marge
       // pour absorber le sequence-of-returns risk et la volatilité réelle.
       // Avec les défauts (5% brut, 2% inflation, ~0.7% drag IS) → SWR ≈ 1.8% au lieu de 2.3%.
-      const tauxRetrait = Math.max(0, rendementNetDrag - inflation - 0.005);
+      const tauxRetrait = Math.max(0, rendementNetDrag - inflation - margeSecurite);
       const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
@@ -834,7 +836,7 @@ export function computeAll(params) {
     });
     const capitalFin = projScenario.total;
     const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, reste * ratioScpi, peaPerso, per);
-    const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - 0.005);
+    const tauxRetraitScenario = Math.max(0, rendementNetDrag - inflation - margeSecurite);
     const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {
