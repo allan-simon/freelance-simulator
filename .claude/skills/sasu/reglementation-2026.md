@@ -199,9 +199,12 @@ Cas de déblocage anticipé : achat résidence principale, invalidité, décès 
 - Pour TMI 30% : IR effectif = 30% × 90% = 27%, total prélèvements = 27% + 9,1% = 36,1% → **fiscNettePer = 0,639**
 
 **Sources primaires (fiscalité rente) :**
-- [CGI art. 158-5-a](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006307702) — abattement 10% sur pensions
-- [CSS art. L136-8 II](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036393375) — taux CSG sur pensions (8,3% taux plein)
-- [CSS art. L14-10-4](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048640522) — CASA 0,3%
+- [CGI art. 158-5-a](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006307702) — abattement 10% sur pensions (vérifié via service-public.gouv.fr/F415)
+- [CSS art. L136-8](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036393375) — taux CSG sur pensions (8,3% taux plein, vérifié via service-public.gouv.fr/F2971)
+
+**Sources secondaires (fiscalité rente) :**
+- [Service Public — Abattement 10% pensions](https://www.service-public.gouv.fr/particuliers/vosdroits/F415) — confirme 10%, plafond 4 439 €/foyer
+- [Service Public — CSG/CRDS/CASA retraite](https://www.service-public.gouv.fr/particuliers/vosdroits/F2971) — confirme CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein)
 
 **Note** : la réforme retraites a été "suspendue" politiquement en 2025 mais l'âge légal reste à 64 ans tant qu'aucune nouvelle loi n'est votée. À surveiller.
 
