@@ -27,7 +27,7 @@ export const DEFAULTS = {
   // Constantes réglementaires 2026
   // Fiscalité nette par enveloppe (1 - prélèvements) — utilisée pour pondérer les retraits
   // fiscNetteCapi : calculée dynamiquement (IS sur gains + flat tax sur distribution)
-  // fiscNetteScpi : calculée dynamiquement (TMI réelle + PS 17,2%)
+  // fiscNetteScpi : calculée dynamiquement (IS + flat tax — SCPI détenues par la SASU)
   // fiscNettePer  : calculée dynamiquement (TMI réelle × 90% + PS pension 9,1%)
   fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6% — seule constante (indépendante de la TMI)
   seuilIS: 42500,
@@ -341,8 +341,10 @@ export function computeAll(params) {
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
-  // Fiscalité nette par enveloppe — SCPI et PER dépendent de la TMI réelle
-  const fiscNetteScpiEff = 1 - tmi - 0.172;  // revenus fonciers : TMI + PS 17,2% (exclus hausse CSG)
+  // Fiscalité nette par enveloppe
+  // SCPI détenues par la SASU : revenus fonciers taxés à l'IS (pas au barème IR du dirigeant),
+  // puis flat tax sur la distribution au dirigeant. Même logique que le contrat capi.
+  const fiscNetteScpiEff = (1 - tauxISEffectif) * (1 - tauxFlatTax);
   const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
 
   // Contrat capi détenu par la SASU (CGI art. 238 septies E) :
