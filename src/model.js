@@ -129,7 +129,7 @@ export function computeConstraints({ tjm, jours, frais, salaireBrut, per }) {
 
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees, inflation = 0 }) {
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation = 0 }) {
   let tc = 0, ts = 0, tp = 0, tpe = 0;
   for (let y = 1; y <= annees; y++) {
     const infY = Math.pow(1 + inflation, y);
@@ -138,7 +138,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tre
     tp = tp * (1 + rendement) + peaPerso * infY;
     tpe = tpe * (1 + rendement) + per * infY;
   }
-  return tc + ts + tp + tpe + tresoSecurite;
+  return tc + ts + tp + tpe + provisionRisque;
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
@@ -297,7 +297,7 @@ export function computeAll(params) {
   const ijSecuMois = ijSecuJour * 30;
   const complementPrevoyance = salaireBrut * 0.4 / 12;
   const totalCouvertMois = ijSecuMois + complementPrevoyance;
-  const tresoSecurite = netNetMensuel * 6;
+  const provisionRisque = netNetMensuel * 6;
   const capitalDeces = salaireBrut * 3;
 
   // --- Projection COMPLÈTE ageActuel → ageFin ---
@@ -313,8 +313,8 @@ export function computeAll(params) {
   // First pass: capital at ageObjectif for drawdown
   // Le PER est bloqué jusqu'à 64 ans (sauf cas exceptionnels)
   // On calcule le drawdown en excluant le PER avant 64 ans
-  const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, tresoSecurite, rendement, annees, inflation });
-  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, tresoSecurite, rendement, annees, inflation });
+  const capitalAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per, provisionRisque, rendement, annees, inflation });
+  const capitalHorsPerAtObjectif = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque, rendement, annees, inflation });
 
   const anneesDrawdown = ageFin - ageObjectif;
   const anneesAvant64 = Math.max(0, Math.min(64, ageFin) - ageObjectif);
@@ -324,10 +324,10 @@ export function computeAll(params) {
   // La boucle fait annees-1 contributions (y=1..annees-1 en phase 1).
   // À y=annees (phase 2), le capital croît PUIS le retrait a lieu.
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
-  // La tréso sécurité couvre le risque lissé → s'amortit linéairement, pas drainable.
+  // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
-  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, tresoSecurite: 0, rendement, annees: anneesContrib, inflation });
-  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, tresoSecurite: 0, rendement, annees: anneesContrib, inflation });
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, provisionRisque: 0, rendement, annees: anneesContrib, inflation });
+  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, provisionRisque: 0, rendement, annees: anneesContrib, inflation });
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
 
   let drawdownAnnuelBrutAvant64 = 0;
@@ -375,8 +375,8 @@ export function computeAll(params) {
     if (y === 0) {
       projection.push({
         age, annee, phase,
-        capi: 0, scpiVal: 0, pea: 0, perVal: 0, tresoSecu: tresoSecurite,
-        total: tresoSecurite, totalReel: tresoSecurite,
+        capi: 0, scpiVal: 0, pea: 0, perVal: 0, tresoSecu: provisionRisque,
+        total: provisionRisque, totalReel: provisionRisque,
         revenuPassifMois: 0, retraiteMois: 0, perRenteMois: 0, missionsMois: 0,
         drawdownMois: 0,
         revenuTotalMois: Math.round(netNetMensuel),
@@ -445,12 +445,12 @@ export function computeAll(params) {
         }
       }
 
-      // En mode croquer capital, la tréso sécurité disparaît linéairement
+      // En mode croquer capital, la provision pour risque s'amortit linéairement
       // (elle absorbe les aléas lissés chaque année → pas un stock permanent)
       const anneesDepuisObjectif = age - ageObjectif;
       const tresoRestante = (croquerCapital && phase >= 2)
-        ? Math.max(0, tresoSecurite * (1 - anneesDepuisObjectif / anneesDrawdown))
-        : tresoSecurite;
+        ? Math.max(0, provisionRisque * (1 - anneesDepuisObjectif / anneesDrawdown))
+        : provisionRisque;
 
       const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
       const totalAvecPer = totalHorsPer + cumPer;
@@ -500,7 +500,7 @@ export function computeAll(params) {
         age, annee, phase,
         capi: Math.round(cumCapi), scpiVal: Math.round(cumScpi),
         pea: Math.round(cumPea), perVal: Math.round(cumPer),
-        tresoSecu: Math.round(tresoSecurite),
+        tresoSecu: Math.round(provisionRisque),
         total: Math.round(totalAvecPer),
         revenuPassifMois: Math.round(croquerCapital ? drawdownMois : revenuPassifNet),
         retraiteMois, perRenteMois, missionsMois, drawdownMois,
@@ -528,7 +528,7 @@ export function computeAll(params) {
       scpi: reste * ratioScpi,
       peaPerso,
       per,
-      tresoSecurite: nn / 12 * 6,
+      provisionRisque: nn / 12 * 6,
       rendement,
       annees,
       inflation,
@@ -561,7 +561,7 @@ export function computeAll(params) {
     quotientFamilial, irFoyer, votreIR, tmi,
     netNetAnnuel, netNetMensuel,
     resteSASU, contratCapi, scpi, reserveTreso, peaPerso, per, epargneTotale,
-    ijSecuMois, complementPrevoyance, totalCouvertMois, tresoSecurite, capitalDeces,
+    ijSecuMois, complementPrevoyance, totalCouvertMois, provisionRisque, capitalDeces,
     projection, scenariosRatio, annees,
     cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
@@ -615,7 +615,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   L.push(`    Reste en SASU     : ${fmt(r.resteSASU)}`);
   L.push(`    Contrat capi      : ${fmt(r.contratCapi)}`);
   L.push(`    SCPI              : ${fmt(r.scpi)}`);
-  L.push(`    Tréso             : ${fmt(r.reserveTreso)}`);
+  L.push(`    Provision risque   : ${fmt(r.reserveTreso)}`);
   L.push(`    PEA perso         : ${fmt(r.peaPerso)}`);
   L.push(`    Épargne totale/an : ${fmt(r.epargneTotale)}`);
   L.push('');

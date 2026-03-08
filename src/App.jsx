@@ -501,7 +501,7 @@ export default function App() {
             <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
             <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
             <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
-            <Row label="Trésorerie de sécurité recommandée" value={fmt(r.tresoSecurite)} bold highlight sub="6 mois de net net — couvre intercontrat + arrêt maladie" />
+            <Row label="Provision pour risque" value={fmt(r.provisionRisque)} bold highlight sub="6 mois de net net — couvre intercontrat, arrêt maladie, aléas lissés" />
             <Row label="Capital décès (contrat prévoyance)" value={fmt(r.capitalDeces)} sub="~3× salaire brut annuel, versé à votre famille" />
           </Card>
         </div>
