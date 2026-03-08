@@ -221,9 +221,10 @@ export function computeConstraints({
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25 }) {
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89 }) {
   let tc = 0, tcBase = 0, ts = 0, tp = 0, tpe = 0;
   const forfaitTME = 1.05 * tme;
+  const rendementScpiDistrib = rendementScpi * partDistribScpi;
   for (let y = 1; y <= annees; y++) {
     const infY = Math.pow(1 + inflation, y);
     tc = tc * (1 + rendementCapi) + contratCapi * infY;
@@ -231,6 +232,8 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
     ts = ts * (1 + rendementScpi) + scpi * infY;
+    // IS annuel sur les distributions SCPI (loyers)
+    if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
     tp = tp * (1 + rendementPea) + peaPerso * infY;
     tpe = tpe * (1 + rendementPer) + per * infY;
   }
@@ -428,7 +431,9 @@ export function computeAll(params) {
     // Régularisation au rachat : IS seulement sur l'excédent de gain réel vs forfaits déjà taxés
     const gainNonEncoreTaxe = Math.max(0, gain - (cumForfaits || 0));
     const isRegul = Math.min(gainNonEncoreTaxe, seuilISRestant) * tauxISReduit + Math.max(0, gainNonEncoreTaxe - seuilISRestant) * tauxISNormal;
-    return ((value - isRegul) / value) * (1 - tauxFlatTax);
+    // Flat tax uniquement sur le gain distribuable (gain net d'IS), pas sur le retour de capital (basis)
+    const gainNetIS = Math.max(0, gain - isRegul);
+    return (basis + gainNetIS * (1 - tauxFlatTax)) / value;
   };
 
   // Fiscalité pondérée : moyenne des taux nets par enveloppe, pondérée par les encours
@@ -485,7 +490,7 @@ export function computeAll(params) {
   // On calcule le drawdown en excluant le PER avant 64 ans
   // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
   const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
-  const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime) };
+  const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime), partDistribScpi };
   const rendements = { rendementCapi, rendementScpi, rendementPea, rendementPer };
   const projAtObjectif = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
