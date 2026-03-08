@@ -148,7 +148,8 @@ const TRANCHES_IR = [
   { seuil: 84577, taux: 0.41 },
   { seuil: 181917, taux: 0.45 },
 ];
-function computeIR(quotientFamilial) {
+const PLAFOND_DEMI_PART = 1759; // avantage max par demi-part supplémentaire (CGI art. 197-I-2, 2025)
+function computeIRBrut(quotientFamilial) {
   let irParPart = 0, tmi = 0;
   for (let i = 1; i < TRANCHES_IR.length; i++) {
     const plafond = i < TRANCHES_IR.length - 1 ? TRANCHES_IR[i + 1].seuil : Infinity;
@@ -157,6 +158,27 @@ function computeIR(quotientFamilial) {
     if (base > 0) tmi = TRANCHES_IR[i].taux;
   }
   return { irParPart, tmi };
+}
+// Plafonnement du quotient familial (CGI art. 197-I-2) :
+// L'avantage procuré par chaque demi-part au-delà de 2 parts (couple) est plafonné.
+function computeIR(quotientFamilial, parts = 2) {
+  const result = computeIRBrut(quotientFamilial);
+  if (parts <= 2) return result;
+  // IR sans les demi-parts supplémentaires (base couple = 2 parts)
+  const qf2 = quotientFamilial * parts / 2;
+  const ir2 = computeIRBrut(qf2).irParPart * 2;
+  // IR avec les demi-parts
+  const irAvecParts = result.irParPart * parts;
+  // Avantage = réduction d'IR grâce aux demi-parts supplémentaires
+  const avantage = ir2 - irAvecParts;
+  const demiPartsSupp = (parts - 2) * 2; // nombre de demi-parts au-delà de 2
+  const plafond = demiPartsSupp * PLAFOND_DEMI_PART;
+  if (avantage > plafond) {
+    // Plafonner : IR = IR sans demi-parts - plafond
+    const irPlafonne = ir2 - plafond;
+    return { irParPart: irPlafonne / parts, tmi: result.tmi };
+  }
+  return result;
 }
 
 // Net imposable = net payé + CSG non déductible + CRDS (réintégrées dans l'assiette IR)
@@ -401,7 +423,7 @@ export function computeAll(params) {
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
   const quotientFamilial = revenuImposableFoyer / partsFiscales;
 
-  const { irParPart, tmi } = computeIR(quotientFamilial);
+  const { irParPart, tmi } = computeIR(quotientFamilial, partsFiscales);
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
@@ -557,7 +579,7 @@ export function computeAll(params) {
     const revenuRetraiteVous = pensionsBrutesVous - abattementVous;
     const revenuRetraiteConjoint = revenuConjoint - abattementConjoint;
     const qfRetraite = (revenuRetraiteVous + revenuRetraiteConjoint) / partsFiscales;
-    tmiRetraite = computeIR(qfRetraite).tmi;
+    tmiRetraite = computeIR(qfRetraite, partsFiscales).tmi;
     // Rente PER imposée comme pension (CGI art. 158-5-a) :
     //   - Part imposable = rente brute − quote-part de l'abattement
     //     (prorata : la rente PER partage le plafond avec les autres pensions)
@@ -745,29 +767,52 @@ export function computeAll(params) {
         }
       }
 
-      // Recalculer le seuil IS restant selon la phase :
-      // Phase 1 → le résultat d'exploitation (indexé inflation) consomme le seuil
-      // Phases 2/3 → pas d'activité, seuil intégralement disponible pour les placements
-      seuilISRestant = phase === 1
-        ? Math.max(0, seuilIS - resultatAvantIS * infY)
-        : seuilIS;
-
       // Drag fiscal annuel sur le capital détenu par la SASU :
       // Le forfait capi et les revenus SCPI partagent le même seuil IS restant.
       const forfaitAnnuel = cumCapiBase > 0 ? cumCapiBase * forfaitTME : 0;
       const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rendementScpiDistrib : 0;
-      const totalRevenuIS = forfaitAnnuel + revenuScpiAnnuel;
-      if (totalRevenuIS > 0) {
-        const isTotal = computeISOnAmount(totalRevenuIS);
+      const totalRevenuPlacements = forfaitAnnuel + revenuScpiAnnuel;
+
+      // Seuil IS partagé entre exploitation et placements :
+      // Phase 1 → le résultat d'exploitation consomme le seuil en priorité
+      // Phase 2 → missions ponctuelles + placements partagent le seuil
+      // Phase 3 → pas d'activité, seuil intégralement disponible pour les placements
+      const resultatMissionsY = phase === 2 ? resultatMissions * infY : 0;
+      if (phase === 1) {
+        seuilISRestant = Math.max(0, seuilIS - resultatAvantIS * infY);
+      } else if (phase === 2) {
+        // Missions + placements partagent le seuil IS
+        const totalIS2 = resultatMissionsY + totalRevenuPlacements;
+        seuilISRestant = Math.max(0, seuilIS - totalIS2);
+      } else {
+        seuilISRestant = seuilIS;
+      }
+
+      // IS sur placements : le seuil résiduel dépend du résultat d'exploitation (phase 1)
+      // ou des missions (phase 2) qui consomment le seuil en priorité
+      if (totalRevenuPlacements > 0) {
+        const seuilPourPlacements = phase === 1
+          ? Math.max(0, seuilIS - resultatAvantIS * infY)
+          : Math.max(0, seuilIS - resultatMissionsY);
+        const isPlacements = Math.min(totalRevenuPlacements, seuilPourPlacements) * tauxISReduit
+          + Math.max(0, totalRevenuPlacements - seuilPourPlacements) * tauxISNormal;
         // Répartir l'IS au prorata entre capi et SCPI
         if (forfaitAnnuel > 0) {
-          cumCapi = Math.max(0, cumCapi - isTotal * (forfaitAnnuel / totalRevenuIS));
+          cumCapi = Math.max(0, cumCapi - isPlacements * (forfaitAnnuel / totalRevenuPlacements));
           cumForfaitsIS += forfaitAnnuel; // base forfaitaire cumulée (pour régularisation au rachat)
         }
         if (revenuScpiAnnuel > 0) {
-          cumScpi = Math.max(0, cumScpi - isTotal * (revenuScpiAnnuel / totalRevenuIS));
+          cumScpi = Math.max(0, cumScpi - isPlacements * (revenuScpiAnnuel / totalRevenuPlacements));
         }
       }
+
+      // Revenu missions phase 2 : recalculé avec le seuil IS résiduel après placements
+      // (les missions et placements partagent le même seuil IS de 42 500 €)
+      const seuilISApresPlacements = Math.max(0, seuilIS - totalRevenuPlacements);
+      const revenuMissionsNet = phase === 2
+        ? (resultatMissionsY - Math.min(resultatMissionsY, seuilISApresPlacements) * tauxISReduit
+           - Math.max(0, resultatMissionsY - seuilISApresPlacements) * tauxISNormal) * (1 - tauxFlatTax)
+        : 0;
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
       // (elle absorbe les aléas lissés chaque année → pas un stock permanent)
@@ -803,8 +848,8 @@ export function computeAll(params) {
       const retraiteMois = phase === 3
         ? Math.round(inflate(retraiteBaseMois) + inflate(retraiteCompMois) * facteurErosionArrco)
         : 0;
-      const peaPhase2 = (!croquerCapital && phase === 2) ? Math.min(peaPerso / 2, revenuMissionsAnnuel) : 0;
-      const missionsMois = phase === 2 ? inflate(Math.round((revenuMissionsAnnuel - peaPhase2) / 12)) : 0;
+      const peaPhase2 = (!croquerCapital && phase === 2) ? Math.min(peaPerso / 2 * infY, revenuMissionsNet) : 0;
+      const missionsMois = phase === 2 ? Math.round((revenuMissionsNet - peaPhase2) / 12) : 0;
 
       let revenuTotalMois;
       if (phase === 1) {
@@ -829,9 +874,9 @@ export function computeAll(params) {
       } else if (croquerCapital) {
         // Retraite en réel : base = valeur constante, complémentaire érodée par sous-indexation
         const retraiteMoisReel = phase === 3 ? Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco) : 0;
-        revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(revenuMissionsAnnuel / 12) + retraiteMoisReel);
+        revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(deflate(missionsMois, y)) + retraiteMoisReel);
       } else if (phase === 2) {
-        revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round((revenuMissionsAnnuel - peaPhase2) / 12) + (perDebloque ? perRenteMoisReel : 0));
+        revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round(deflate(missionsMois, y)) + (perDebloque ? perRenteMoisReel : 0));
       } else {
         const retraiteMoisReel = Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco);
         revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteMoisReel + perRenteMoisReel);
