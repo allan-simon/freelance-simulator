@@ -516,7 +516,8 @@ export function computeAll(params) {
       const totalAvecPer = totalHorsPer + cumPer;
 
       const fiscPondYear = fiscalitePonderee(cumCapi, cumScpi, cumPea, cumPer, false);
-      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * 0.04 * fiscPondYear / 12;
+      const tauxRetrait = Math.max(0, rendement - inflation); // SWR = rendement réel, préserve le capital en pouvoir d'achat
+      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
 
       // drawdownMois = retrait réel (plafonné au pool disponible)
       const perDebloque = age >= 64;
@@ -525,7 +526,7 @@ export function computeAll(params) {
 
       // inflate() : le TJM suit l'inflation (et même plus : progression avec l'XP), salaire, missions, retraite → leur nominal croît
       const inflate = (base) => Math.round(base * Math.pow(1 + inflation, y));
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * 0.04 * fiscNettePer / 12) : 0;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * tauxRetrait * fiscNettePer / 12) : 0;
       // Revenus indexés sur l'inflation → nominal croît, réel constant
       const retraiteMois = phase === 3 ? inflate(retraiteTotaleMois) : 0;
       const missionsMois = phase === 2 ? inflate(Math.round(revenuMissionsAnnuel / 12)) : 0;
@@ -596,7 +597,8 @@ export function computeAll(params) {
       inflation,
     });
     const fiscScenario = fiscalitePonderee(reste * ratioCapi, reste * ratioScpi, peaPerso, per);
-    const revPassif = capitalFin * 0.04 * fiscScenario / 12;
+    const tauxRetraitScenario = Math.max(0, rendement - inflation);
+    const revPassif = capitalFin * tauxRetraitScenario * fiscScenario / 12;
     const defl = inflation > 0 ? Math.pow(1 + inflation, annees) : 1;
     return {
       ratio: r,

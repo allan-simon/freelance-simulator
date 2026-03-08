@@ -49,7 +49,7 @@ const REGL = {
   FISC_NETTE_PER:  0.55,   // IR TMI + PS (sortie rente)
   PEA_ANNUEL: 2400,
   PEA_PHASE2_ANNUEL: 1200,     // versement PEA réduit en phase "lever le pied"
-  TAUX_RETRAIT_PERPETUEL: 0.04, // règle des 4%
+  // Pas de taux de retrait hardcodé : on utilise rendement - inflation (SWR)
 
   // Retraite [8]
   AGE_RETRAITE: 67,             // taux plein automatique
@@ -183,6 +183,7 @@ function computeAll(params) {
   const retraiteBaseMois = REGL.RETRAITE_BASE_MOIS;
   const retraiteCompMois = REGL.RETRAITE_COMP_MOIS;
   const retraiteTotaleMois = retraiteBaseMois + retraiteCompMois;
+  const tauxRetrait = Math.max(0, rendement - inflation); // SWR = rendement réel
   // Phase 2 "lever le pied" : modèle de coûts propre
   // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle)
   // CA missions → résultat → IS → dividendes flat tax
@@ -287,13 +288,13 @@ function computeAll(params) {
       
       // Revenus passifs (mode perpétuel : 4% des fruits)
       const fiscPondYear = fiscPonderee(cumCapi, cumScpi, cumPea, cumPer, false);
-      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * REGL.TAUX_RETRAIT_PERPETUEL * fiscPondYear / 12;
+      const revenuPassifNet = croquerCapital ? 0 : totalHorsPer * tauxRetrait * fiscPondYear / 12;
       
       // Drawdown mensuel (mode consommation)
       const drawdownMois = (croquerCapital && phase >= 2) ? Math.round(drawdownMensuelNet) : 0;
       
       const perDebloque = age >= REGL.AGE_DEBLOCAGE_PER;
-      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * REGL.TAUX_RETRAIT_PERPETUEL * REGL.FISC_NETTE_PER / 12) : 0;
+      const perRenteMois = (!croquerCapital && perDebloque) ? Math.round(cumPer * tauxRetrait * REGL.FISC_NETTE_PER / 12) : 0;
       const retraiteMois = phase === 3 ? retraiteTotaleMois : 0;
       const missionsMois = phase === 2 ? Math.round(revenuMissionsAnnuel / 12) : 0;
       
@@ -332,7 +333,7 @@ function computeAll(params) {
     const epargne = reste * (REGL.RATIO_CONTRAT_CAPI + REGL.RATIO_SCPI) + peaPerso + per;
     // FV annuité
     const capitalFin = rendement > 0 ? epargne * ((Math.pow(1 + rendement, annees) - 1) / rendement) : epargne * annees;
-    const revPassif = capitalFin * REGL.TAUX_RETRAIT_PERPETUEL * (1 - tauxFlatTax) / 12;
+    const revPassif = capitalFin * tauxRetrait * (1 - tauxFlatTax) / 12;
     return {
       ratio: r,
       netMensuel: Math.round(nn / 12),
@@ -361,7 +362,7 @@ function computeAll(params) {
     cdiNetAnnuel, cdiCapital14,
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
     capitalAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
-    joursMissionsPonctuelles
+    joursMissionsPonctuelles, tauxRetrait
   };
 }
 
@@ -727,7 +728,7 @@ export default function App() {
                 <strong>Mode "je croque tout" :</strong> Vous retirez {fmt(r.drawdownMensuelNet)}/mois net de votre capital
                 à partir de {ageObjectif} ans (+ missions + retraite). Le capital atteint 0 € à {ageFin} ans.
                 Après {ageFin} ans il ne reste que la retraite obligatoire ({fmt(r.retraiteTotaleMois)}/mois).
-                <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * REGL.TAUX_RETRAIT_PERPETUEL * (1 - REGL.TAUX_FLAT_TAX) / 12)) * 100 - 100)}% de revenu en plus
+                <br />C'est ~{Math.round(r.drawdownMensuelNet / Math.max(1, (r.capitalAtObjectif * r.tauxRetrait * (1 - REGL.TAUX_FLAT_TAX) / 12)) * 100 - 100)}% de revenu en plus
                 qu'en rente perpétuelle, mais rien à transmettre.
               </>
             ) : (
