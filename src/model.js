@@ -465,7 +465,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
 
   // Scénarios
   L.push('  Scénarios dividendes vs capitalisation :');
-  L.push('  Div.nets/an   Ratio    Net/mois    Capital@' + ageObjectif + '    Rev.passif/m');
+  L.push('  Div.nets/an   Ratio    Net/mois    Capital@' + ageObjectif + '    Rente/m@' + ageObjectif);
   L.push('  ' + '─'.repeat(72));
   for (const s of r.scenariosRatio) {
     const marker = s.isSelected ? ' ◄' : '';

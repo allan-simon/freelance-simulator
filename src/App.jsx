@@ -583,7 +583,7 @@ export default function App() {
                   <th style={{ padding: '8px 6px', textAlign: 'center' }}>Ratio</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Net /mois</th>
                   <th style={{ padding: '8px 6px', textAlign: 'right' }}>Capital {ageObjectif} ans</th>
-                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Revenu passif /mois</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Rente /mois à {ageObjectif} ans</th>
                 </tr>
               </thead>
               <tbody>
