@@ -10,7 +10,8 @@ export const DEFAULTS = {
   divNetsVoulus: 40000,
   rendement: 0.06, // fallback si un seul rendement est fourni (CLI, URL legacy)
   rendementCapi: 0.06,  // contrat capi lux, FID actions diversifié
-  rendementScpi: 0.045, // SCPI, loyers nets de frais de gestion
+  rendementScpi: 0.045, // SCPI, rendement total (distribution + revalorisation parts)
+  partDistribScpi: 0.89, // ~4% distribution sur 4,5% total → 89% (seule la distribution est imposable à l'IS)
   rendementPea:  0.07,  // PEA, ETF actions européennes
   rendementPer:  0.05,  // PER, allocation mixte/défensive
   ageObjectif: 50,
@@ -319,6 +320,7 @@ export function computeAll(params) {
     fiscNettePea = DEFAULTS.fiscNettePea,
     psPension = DEFAULTS.psPension,
     plafondAbattementPension = DEFAULTS.plafondAbattementPension,
+    partDistribScpi = DEFAULTS.partDistribScpi,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
@@ -334,6 +336,9 @@ export function computeAll(params) {
   const rendementScpi = rendementScpi_;
   const rendementPea  = rendementPea_;
   const rendementPer  = rendementPer_;
+  // SCPI : seule la distribution (loyers) est imposable à l'IS chaque année.
+  // La revalorisation des parts est une plus-value latente, imposée uniquement à la cession.
+  const rendementScpiDistrib = rendementScpi * partDistribScpi;
 
   // --- CA ---
   const caHT = tjm * jours;
@@ -395,9 +400,10 @@ export function computeAll(params) {
   // SCPI détenues par la SASU : revenus fonciers taxés à l'IS (pas au barème IR du dirigeant),
   // puis flat tax sur la distribution au dirigeant. Même logique que le contrat capi.
   // On estime le revenu SCPI annuel pour calculer le taux IS moyen applicable.
+  // Seule la distribution (loyers) est imposable, pas la revalorisation des parts.
   const ratioScpiEff = Math.max(0, 1 - ratioTreso - ratioCapi);
   const resteSASUEstime = benefDistribuable - divBrutsSortis;
-  const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendementScpi;
+  const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendementScpiDistrib;
   const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
   // fiscNettePerEff, tmiRetraite : calculés après estimation du revenu en retraite (voir plus bas)
   let fiscNettePerEff, tmiRetraite;
@@ -537,7 +543,7 @@ export function computeAll(params) {
     ? projAtObjectif.capiBase / projAtObjectif.capiValue
     : 1;
   const dragFiscalCapi = forfaitTME * tauxISMoyen(forfaitEstime) * ratioBaseValeur; // drag en % de la valeur
-  const dragFiscalScpi = rendementScpi * tauxISMoyen(revenuScpiEstime);  // IS sur les revenus fonciers
+  const dragFiscalScpi = rendementScpiDistrib * tauxISMoyen(revenuScpiEstime);  // IS sur les loyers (pas la revalo)
   const dragFiscalMoyen = partCapi * dragFiscalCapi + partScpi * dragFiscalScpi;
   // Rendement nominal pondéré des enveloppes SASU (capi + SCPI) soumises au drag IS
   const rendementPondereCapiScpi = partCapi * rendementCapi + partScpi * rendementScpi;
@@ -698,7 +704,7 @@ export function computeAll(params) {
       // Drag fiscal annuel sur le capital détenu par la SASU :
       // Le forfait capi et les revenus SCPI partagent le même seuil IS restant.
       const forfaitAnnuel = cumCapiBase > 0 ? cumCapiBase * forfaitTME : 0;
-      const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rendementScpi : 0;
+      const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rendementScpiDistrib : 0;
       const totalRevenuIS = forfaitAnnuel + revenuScpiAnnuel;
       if (totalRevenuIS > 0) {
         const isTotal = computeISOnAmount(totalRevenuIS);

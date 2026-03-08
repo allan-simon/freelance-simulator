@@ -233,7 +233,32 @@ Enveloppe d'investissement souscrite par la société (personne morale à l'IS).
 
 **Impact** : véhicule principal de capitalisation (65% du reste SASU par défaut). Rendement typique 4-7% selon allocation.
 
-## [10] Estimation retraite (base + complémentaire AGIRC-ARRCO)
+## [10b] SCPI détenues par la SASU — fiscalité IS
+
+Les parts de SCPI détenues par une société à l'IS génèrent deux types de revenus, fiscalement distincts :
+
+- **Distribution (loyers)** : revenus fonciers imposables à l'IS chaque année (CGI art. 206-1 : tous revenus d'une société à l'IS). Typiquement ~4% du rendement total. L'IS est dû même si les distributions sont réinvesties.
+- **Revalorisation des parts** : plus-value latente non imposée tant que les parts ne sont pas cédées. Typiquement ~0,5%/an. À la cession, la plus-value est un produit exceptionnel soumis à l'IS (régime des plus-values professionnelles CT/LT ne s'applique pas aux sociétés à l'IS, sauf cas particuliers).
+
+Le rendement total (~4,5%) se décompose donc en :
+- Part distribution (imposable annuellement) : ~89% du rendement total
+- Part revalorisation (latente) : ~11% du rendement total
+
+Le simulateur utilise `partDistribScpi = 0.89` pour ne taxer à l'IS que la part distribution.
+
+**Sources primaires :**
+- [CGI art. 206-1](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006308756) — sociétés à l'IS : imposables sur l'ensemble de leurs bénéfices (dont revenus fonciers)
+- [CGI art. 38](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006302098) — bénéfice imposable = variation d'actif net (les plus-values latentes ne sont pas imposées tant que non réalisées)
+- [CGI art. 39 duodecies](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006302346) — régime des plus-values professionnelles (CT/LT)
+
+**Sources secondaires :**
+- [ASPIM — Rendement SCPI 2024](https://www.aspim.fr/fr/etudes-recherche/les-chiffres-cles/) — taux de distribution moyen ~4,5% (dont ~4% distribution, ~0,5% revalorisation)
+- [MeilleureSCPI — Performance SCPI](https://www.meilleurescpi.com/scpi/performances/) — historique rendements distribution vs revalorisation
+- [Primaliance — SCPI en société à l'IS](https://www.primaliance.com/blog/societe-civile-a-l-is-et-scpi) — fiscalité des revenus SCPI détenus par une PM à l'IS
+
+**Impact** : en ne taxant que la distribution (~4%) au lieu du rendement total (4,5%), le drag fiscal annuel baisse d'environ 10-12%, améliorant la capitalisation long terme.
+
+## [11] Estimation retraite (base + complémentaire AGIRC-ARRCO)
 
 Le simulateur estime la pension de retraite à 67 ans (taux plein automatique) en deux composantes :
 
@@ -288,6 +313,7 @@ Le simulateur estime la pension de retraite à 67 ans (taux plein automatique) e
 | Âge légal retraite | 64 ans | Loi 2023-270 art. 10 |
 | Chèques-vacances | 546,91 €/an exonérés (hors CSG/CRDS) | Code tourisme L411-1 |
 | Capi lux fiscalité IS | 105% TME | CGI 238 septies E |
+| SCPI part distribution | ~89% du rendement total (IS annuel) | CGI 206-1, 38 |
 | Retraite base | SAM × 50% × prorata | CSS L351-1, R351-29 |
 | AGIRC-ARRCO point achat | 19,6321 € (2024) | ANI 17/11/2017 |
 | AGIRC-ARRCO point service | 1,4159 € (2024) | ANI 17/11/2017 |
