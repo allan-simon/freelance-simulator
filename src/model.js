@@ -29,7 +29,7 @@ export const DEFAULTS = {
   fiscNettePea:  0.828,  // PEA > 5 ans : PS seules 17,2%
   fiscNettePer:  0.55,   // PER sortie rente : IR TMI ~30% + PS 17,2% (approx)
   tauxSalariales: 0.28,
-  seuilIS: 100000,
+  seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
   tauxFlatTax: 0.314,

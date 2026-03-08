@@ -56,18 +56,18 @@ Taux effectifs calculés par le simulateur :
 
 ## [2] Impôt sur les Sociétés (IS) 2026
 
-Taux réduit de 15% jusqu'à 100 000 € de résultat (PME éligibles). Taux normal de 25% au-delà. Seuil relevé de 42 500 € à 100 000 € par la LF 2026.
+Taux réduit de 15% jusqu'à **42 500 €** de résultat (PME éligibles). Taux normal de 25% au-delà. Le seuil reste à 42 500 € : l'amendement PLF 2026 (n°I-2531) qui proposait de le relever à 100 000 € a été voté en première lecture à l'Assemblée mais **n'a pas été retenu dans le texte final** de la LF 2026 (LOI n° 2026-103 du 19/02/2026).
 
 **Sources primaires :**
 - [CGI art. 219 I](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006303637) — taux de l'IS (15% et 25%)
 - [CGI art. 219 I b](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006303637) — conditions du taux réduit PME (CA < 10M€, capital détenu à 75%+ par des personnes physiques)
-- [Loi de Finances 2026 art. XX](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000051093079) — relèvement du seuil à 100 000 €
+- [LOI n° 2026-103 du 19/02/2026](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053508155) — LF 2026 (ne contient pas le relèvement du seuil)
 
 **Sources secondaires :**
-- [LégiFiscal — PLF 2026 seuil IS PME](https://www.legifiscal.fr/actualites-fiscales/4306-plf-2026-seuil-is-pme-15-porte-100000.html)
-- [economie.gouv.fr — LF 2026](https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises)
+- [LégiFiscal — Publication LF 2026](https://www.legifiscal.fr/actualites-fiscales/4433-publication-loi-finances-2026.html) — seuil IS PME non mentionné parmi les mesures adoptées
+- [economie.gouv.fr — LF 2026 entreprises](https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises) — confirme le seuil de 42 500 €
 
-**Impact** : sur 158k€ de résultat, IS effectif ~18.7% au lieu de 25% grâce au taux réduit.
+**Impact** : sur 158k€ de résultat, IS = 42 500 × 15% + 115 500 × 25% = 35 250 € (taux effectif ~22,3%).
 
 ## [3] Cotisations salariales ~28%
 
@@ -239,8 +239,8 @@ Le simulateur estime la pension de retraite à 67 ans (taux plein automatique) e
 |-----------|-------------|-------------------|
 | Cotisations patronales | ~38-39% du brut (calcul exact par tranche) | CSS L241-1 et s. |
 | Cotisations salariales | ~28% du brut | CSS L241-2, L241-3, L136-1-1 |
-| IS taux réduit | 15% (≤ 100k€) | CGI 219 I b |
-| IS taux normal | 25% (> 100k€) | CGI 219 I |
+| IS taux réduit | 15% (≤ 42 500 €) | CGI 219 I b |
+| IS taux normal | 25% (> 42 500 €) | CGI 219 I |
 | Flat tax (PFU) | 31,4% | CGI 200 A + CSS L136-7 |
 | IR tranche max | 45% (> 181 917 €/part) | CGI 197 I 1° |
 | PASS | 48 060 € | CSS D242-4 |

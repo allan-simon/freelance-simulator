@@ -12,7 +12,7 @@ const REGL = {
   TAUX_SALARIALES: 0.28,
 
   // Impôt sur les sociétés — LDF 2026 [2]
-  SEUIL_IS_REDUIT: 100000,
+  SEUIL_IS_REDUIT: 42500,
   TAUX_IS_REDUIT: 0.15,
   TAUX_IS_NORMAL: 0.25,
 
@@ -725,7 +725,7 @@ export default function App() {
             textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>Sources réglementaires (2026)</h3>
           <div style={{ fontSize: 11, color: '#4a5568', lineHeight: 1.8, fontFamily: "'DM Sans', sans-serif" }}>
             <div><strong>[1]</strong> Cotisations patronales ~42% — <a href="https://www.legalstart.fr/fiches-pratiques/sasu/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Legalstart</a> · <a href="https://mon-entreprise.urssaf.fr/simulateurs/sasu" target="_blank" rel="noopener noreferrer">Simulateur URSSAF</a></div>
-            <div><strong>[2]</strong> IS : 15% → 100 000 € puis 25% (LDF 2026) — <a href="https://www.legifiscal.fr/actualites-fiscales/4306-plf-2026-seuil-is-pme-15-porte-100000.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
+            <div><strong>[2]</strong> IS : 15% → 42 500 € puis 25% (CGI 219 I b, seuil inchangé — l'amendement PLF 2026 à 100k€ n'a pas été retenu dans le texte final) — <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006303637" target="_blank" rel="noopener noreferrer">CGI art. 219</a> · <a href="https://www.economie.gouv.fr/entreprises/gerer-sa-fiscalite-et-ses-impots/loi-de-finances-2026-ce-qui-change-pour-les-entreprises" target="_blank" rel="noopener noreferrer">economie.gouv.fr</a></div>
             <div><strong>[3]</strong> Cotisations salariales ~28% — <a href="https://www.dougs.fr/blog/charges-sociales-sasu/" target="_blank" rel="noopener noreferrer">Dougs</a> · <a href="https://entreprendre.service-public.gouv.fr/vosdroits/F36240" target="_blank" rel="noopener noreferrer">Service Public</a></div>
             <div><strong>[4]</strong> Flat tax 31,4% (LFSS 2026, CSG capital +1,4pt) — <a href="https://www.legifiscal.fr/actualites-fiscales/4320-plfss-2026-flat-tax-314-adopte.html" target="_blank" rel="noopener noreferrer">LégiFiscal</a> · <a href="https://www.dougs.fr/blog/flat-taxe-dividendes/" target="_blank" rel="noopener noreferrer">Dougs</a></div>
             <div><strong>[5]</strong> Barème IR 2026 (revenus 2025, +0,9%) — <a href="https://www.service-public.gouv.fr/particuliers/actualites/A18045" target="_blank" rel="noopener noreferrer">Service Public</a> · <a href="https://simulateur-ir-ifi.impots.gouv.fr/calcul_impot/2026/complet/index.htm" target="_blank" rel="noopener noreferrer">impots.gouv.fr</a></div>
