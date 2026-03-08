@@ -515,7 +515,7 @@ export default function App() {
           <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
           <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
           <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle (règle des 4%)"} />
-          <Stat label="vs CDI 100k brut" value={`+${fmtPct((r.netNetMensuel - 5580) / 5580)}`} sub="5 580 €/mois en CDI" color="#38a169" />
+          <Stat label={`vs CDI ${fmtK(salaireBrutCDI)} brut`} value={`+${fmtPct((r.netNetMensuel - r.cdiNetAnnuel / 12) / (r.cdiNetAnnuel / 12))}`} sub={`${fmt(Math.round(r.cdiNetAnnuel / 12))}/mois en CDI`} color="#38a169" />
         </div>
 
         {/* ÉTAPE 4 : PROJECTION */}
@@ -673,7 +673,7 @@ export default function App() {
         <Card title="Revenus mensuels à chaque étape de vie" subtitle="Du CDI actuel jusqu'à la retraite — combien vous touchez, d'où ça vient" accent="#38a169">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {[
-              { label: "Aujourd'hui (CDI)", emoji: "💼", value: 5580, reel: 5580, sub: "100k brut", color: "#718096" },
+              { label: "Aujourd'hui (CDI)", emoji: "💼", value: Math.round(r.cdiNetAnnuel / 12), reel: Math.round(r.cdiNetAnnuel / 12), sub: `${fmtK(salaireBrutCDI)} brut`, color: "#718096" },
               { label: "Freelance", emoji: "🚀", value: Math.round(r.netNetMensuel), reel: Math.round(r.netNetMensuel), sub: `${ageActuel}→${ageObjectif} ans`, color: "#2563eb" },
               { label: `${ageObjectif} ans (${joursLeverLePied}j/an)`, emoji: "⛵",
                 value: (r.projection.find(p => p.age === ageObjectif + 1) || {}).revenuTotalMois || 0,

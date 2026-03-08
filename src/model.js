@@ -547,8 +547,19 @@ export function computeAll(params) {
     };
   });
 
-  // CDI comparison
-  const cdiNetAnnuel = 67000;
+  // CDI comparison — dérivé du salaireBrutCDI paramétrable
+  const TAUX_SALARIALES_CDI = 0.22; // charges salariales typiques CDI cadre privé
+  const cdiNetAvantIR = salaireBrutCDI * (1 - TAUX_SALARIALES_CDI);
+  const cdiImposable = cdiNetAvantIR * (1 - abattementIR);
+  const cdiQF = (cdiImposable + revenuConjoint * (1 - abattementIR)) / partsFiscales;
+  let cdiIRParPart = 0;
+  for (let i = tranches.length - 1; i >= 1; i--) {
+    cdiIRParPart += Math.max(0, cdiQF - tranches[i].seuil) * tranches[i].taux;
+  }
+  const cdiIRFoyer = cdiIRParPart * partsFiscales;
+  const cdiImposableFoyer = cdiImposable + revenuConjoint * (1 - abattementIR);
+  const cdiIR = cdiImposableFoyer > 0 ? cdiIRFoyer * (cdiImposable / cdiImposableFoyer) : 0;
+  const cdiNetAnnuel = cdiNetAvantIR - cdiIR;
   const cdiEpargneMois = 500;
   const cdiCapital14 = rendement > 0 ? cdiEpargneMois * 12 * ((Math.pow(1 + rendement, annees) - 1) / rendement) : cdiEpargneMois * 12 * annees;
 
