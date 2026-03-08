@@ -252,9 +252,11 @@ Le simulateur utilise `partDistribScpi = 0.89` pour ne taxer à l'IS que la part
 - [CGI art. 39 duodecies](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006302346) — régime des plus-values professionnelles (CT/LT)
 
 **Sources secondaires :**
-- [ASPIM — Rendement SCPI 2024](https://www.aspim.fr/fr/etudes-recherche/les-chiffres-cles/) — taux de distribution moyen ~4,5% (dont ~4% distribution, ~0,5% revalorisation)
-- [MeilleureSCPI — Performance SCPI](https://www.meilleurescpi.com/scpi/performances/) — historique rendements distribution vs revalorisation
-- [Primaliance — SCPI en société à l'IS](https://www.primaliance.com/blog/societe-civile-a-l-is-et-scpi) — fiscalité des revenus SCPI détenus par une PM à l'IS
+- [ASPIM — Chiffres du marché SCPI](https://www.aspim.fr/chiffres-du-marche-des-FIA-en-immobilier/scpi.html) — taux de distribution moyen 4,72% en 2024
+- [ASPIM — Performance 2024 des SCPI](https://www.aspim.fr/actualites/les-fonds-immobiliers-grand-public-au-1er-trimestre-2025-les-indicateurs-de-performance-2024-des-scpi/) — distribution 4,72%, rendement global -1,1% (impact revalo parts)
+- [MeilleureSCPI — Classement SCPI 2025](https://www.meilleurescpi.com/actualites/classement-scpi-2025-les-meilleurs-taux-de-distribution/) — taux de distribution et PGA (performance globale incluant revalorisation)
+- [Centrale des SCPI — Investir en SCPI avec une société à l'IS](https://www.centraledesscpi.com/guide-des-scpi/acheter-une-scpi/investir-en-scpi-avec-une-societe-a-l-is) — fiscalité revenus fonciers SCPI en société IS
+- [Profession CGP — Détention de parts SCPI par une société à l'IS](https://www.professioncgp.com/article/juridique-et-fiscal/impot-sur-le-revenu/detentions-de-parts-de-scpi-par-une-societe-a-lis.html) — traitement fiscal détaillé (revenus, plus-values)
 
 **Impact** : en ne taxant que la distribution (~4%) au lieu du rendement total (4,5%), le drag fiscal annuel baisse d'environ 10-12%, améliorant la capitalisation long terme.
 
