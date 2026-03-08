@@ -108,6 +108,8 @@ const TAUX_SAL_T2 = {
 // CSG/CRDS sur 98,25% du brut
 const TAUX_CSG_CRDS = 0.0970; // 9,20% CSG + 0,50% CRDS
 const ASSIETTE_CSG = 0.9825;
+const TAUX_CSG_NON_DEDUCTIBLE = 0.024; // part non déductible de la CSG
+const TAUX_CRDS = 0.005;              // CRDS non déductible
 
 const SUM_SAL_TOTALITE = Object.values(TAUX_SAL_TOTALITE).reduce((a, b) => a + b, 0);
 const SUM_SAL_T1 = Object.values(TAUX_SAL_T1).reduce((a, b) => a + b, 0);
@@ -119,6 +121,13 @@ export function computeCotisationsSalariales(salaireBrut) {
   const t2 = Math.max(0, salaireBrut - PASS);
   return salaireBrut * SUM_SAL_TOTALITE + t1 * SUM_SAL_T1 + t2 * SUM_SAL_T2
        + salaireBrut * ASSIETTE_CSG * TAUX_CSG_CRDS;
+}
+
+// Net imposable = net payé + CSG non déductible + CRDS (réintégrées dans l'assiette IR)
+export function computeNetImposable(salaireBrut) {
+  const netPaye = salaireBrut - computeCotisationsSalariales(salaireBrut);
+  const csgCrdsNonDeductible = salaireBrut * ASSIETTE_CSG * (TAUX_CSG_NON_DEDUCTIBLE + TAUX_CRDS);
+  return netPaye + csgCrdsNonDeductible;
 }
 
 export const RANGES = {
@@ -307,7 +316,8 @@ export function computeAll(params) {
   const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
 
   // --- IR (barème 2025) ---
-  const revenuImposableVous = salaireNet * (1 - abattementIR);
+  const netImposable = computeNetImposable(salaireBrut);
+  const revenuImposableVous = netImposable * (1 - abattementIR);
   const revenuImposableConjoint = revenuConjoint * (1 - abattementIR);
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
   const quotientFamilial = revenuImposableFoyer / partsFiscales;
@@ -341,7 +351,7 @@ export function computeAll(params) {
   const epargneTotale = contratCapi + scpi + peaPerso + per;
 
   // --- Net net (après épargne perso) ---
-  const netNetAnnuel = salaireNet + divNets - votreIR + frais.chequesVacances - peaPerso;
+  const netNetAnnuel = salaireNet + divNets - votreIR + frais.chequesVacances * (1 - ASSIETTE_CSG * TAUX_CSG_CRDS) - peaPerso;
   const netNetMensuel = netNetAnnuel / 12;
 
   // --- Prévoyance ---
@@ -495,7 +505,7 @@ export function computeAll(params) {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendement);
           cumScpi = cumScpi * (1 + rendement);
-          cumPea = cumPea * (1 + rendement) + 1200 * infY;
+          cumPea = cumPea * (1 + rendement) + (peaPerso / 2) * infY; // épargne perso réduite de moitié en phase rente (plus de revenu SASU)
           cumPer = cumPer * (1 + rendement);
         } else {
           cumCapi = cumCapi * (1 + rendement);
@@ -584,7 +594,7 @@ export function computeAll(params) {
   const scenariosRatio = paliers.map(r => {
     const db = benefDistribuable * r;
     const dn = db * (1 - tauxFlatTax);
-    const nn = salaireNet + dn - votreIR + frais.chequesVacances;
+    const nn = salaireNet + dn - votreIR + frais.chequesVacances * (1 - ASSIETTE_CSG * TAUX_CSG_CRDS) - peaPerso;
     const reste = benefDistribuable - db;
     const capitalFin = computeCapitalProjection({
       contratCapi: reste * ratioCapi,
@@ -614,7 +624,8 @@ export function computeAll(params) {
 
   // CDI comparison — mêmes cotisations salariales que SASU (différence = patronales uniquement)
   const cdiNetAvantIR = salaireBrutCDI - computeCotisationsSalariales(salaireBrutCDI);
-  const cdiImposable = cdiNetAvantIR * (1 - abattementIR);
+  const cdiNetImposable = computeNetImposable(salaireBrutCDI);
+  const cdiImposable = cdiNetImposable * (1 - abattementIR);
   const cdiQF = (cdiImposable + revenuConjoint * (1 - abattementIR)) / partsFiscales;
   let cdiIRParPart = 0;
   for (let i = tranches.length - 1; i >= 1; i--) {
