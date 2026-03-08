@@ -520,10 +520,16 @@ export function computeAll(params) {
     // CGI art. 158-5-a : abattement 10% sur pensions, plafond 4 399 € / foyer (2025)
     const retraiteAnnuelleBrute = (retraiteBaseMois + retraiteCompMois) * 12;
     const pensionsBrutesVous = retraiteAnnuelleBrute + rentePerBruteEstimee;
-    const abattementVous = Math.min(pensionsBrutesVous * abattementIR, plafondAbattementPension);
+    // Abattement 10% plafonné à plafondAbattementPension pour le FOYER (CGI 158-5-a)
+    const abattementBrutVous = pensionsBrutesVous * abattementIR;
+    const abattementBrutConjoint = revenuConjoint * abattementIR;
+    const totalAbattementBrut = abattementBrutVous + abattementBrutConjoint;
+    // Si le total dépasse le plafond foyer, on répartit au prorata
+    const ratioPlafond = totalAbattementBrut > plafondAbattementPension
+      ? plafondAbattementPension / totalAbattementBrut : 1;
+    const abattementVous = abattementBrutVous * ratioPlafond;
+    const abattementConjoint = abattementBrutConjoint * ratioPlafond;
     const revenuRetraiteVous = pensionsBrutesVous - abattementVous;
-    // Conjoint : on applique le même abattement 10% plafonné sur son revenu
-    const abattementConjoint = Math.min(revenuConjoint * abattementIR, plafondAbattementPension);
     const revenuRetraiteConjoint = revenuConjoint - abattementConjoint;
     const qfRetraite = (revenuRetraiteVous + revenuRetraiteConjoint) / partsFiscales;
     tmiRetraite = computeIR(qfRetraite).tmi;
