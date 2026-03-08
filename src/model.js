@@ -24,9 +24,9 @@ export const DEFAULTS = {
   },
   // Constantes réglementaires 2026
   // Fiscalité nette par enveloppe (1 - prélèvements) — utilisée pour pondérer les retraits
-  fiscNetteCapi: 0.70,   // Contrat capitalisation : PFU 30% (12,8% IR + 17,2% PS)
-  fiscNetteScpi: 0.53,   // SCPI usufruit : revenus fonciers TMI 30% + PS 17,2% ≈ 47%
-  fiscNettePea:  0.828,  // PEA > 5 ans : PS seules 17,2%
+  fiscNetteCapi: 0.686,  // Contrat capitalisation : PFU 31,4% (12,8% IR + 18,6% PS)
+  fiscNetteScpi: 0.53,   // SCPI usufruit : revenus fonciers TMI 30% + PS 17,2% ≈ 47% (PS 18,6% ne s'applique PAS aux rev. fonciers)
+  fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6%
   fiscNettePer:  0.55,   // PER sortie rente : IR TMI ~30% + PS 17,2% (approx)
   tauxSalariales: 0.28,
   seuilIS: 42500,
