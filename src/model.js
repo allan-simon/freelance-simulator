@@ -32,8 +32,11 @@ export const DEFAULTS = {
   // Fiscalité nette par enveloppe (1 - prélèvements) — utilisée pour pondérer les retraits
   // fiscNetteCapi : calculée dynamiquement (IS sur gains + flat tax sur distribution)
   // fiscNetteScpi : calculée dynamiquement (IS + flat tax — SCPI détenues par la SASU)
-  // fiscNettePer  : calculée dynamiquement (TMI réelle × 90% + PS pension 9,1%)
+  // fiscNettePer  : calculée dynamiquement (TMI retraite × 90% + PS pension 9,1%)
   fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6% — seule constante (indépendante de la TMI)
+  // PS sur pensions de retraite (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
+  psPension: 0.091,      // CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein, non exonéré)
+  plafondAbattementPension: 4399, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, 2025)
   seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
@@ -127,6 +130,25 @@ export function computeCotisationsSalariales(salaireBrut) {
   const t2 = Math.max(0, salaireBrut - PASS);
   return salaireBrut * SUM_SAL_TOTALITE + t1 * SUM_SAL_T1 + t2 * SUM_SAL_T2
        + salaireBrut * ASSIETTE_CSG * TAUX_CSG_CRDS;
+}
+
+// Barème IR 2025 — retourne { irParPart, tmi } pour un quotient familial donné
+const TRANCHES_IR = [
+  { seuil: 0, taux: 0 },
+  { seuil: 11600, taux: 0.11 },
+  { seuil: 29579, taux: 0.30 },
+  { seuil: 84577, taux: 0.41 },
+  { seuil: 181917, taux: 0.45 },
+];
+function computeIR(quotientFamilial) {
+  let irParPart = 0, tmi = 0;
+  for (let i = 1; i < TRANCHES_IR.length; i++) {
+    const plafond = i < TRANCHES_IR.length - 1 ? TRANCHES_IR[i + 1].seuil : Infinity;
+    const base = Math.max(0, Math.min(quotientFamilial, plafond) - TRANCHES_IR[i].seuil);
+    irParPart += base * TRANCHES_IR[i].taux;
+    if (base > 0) tmi = TRANCHES_IR[i].taux;
+  }
+  return { irParPart, tmi };
 }
 
 // Net imposable = net payé + CSG non déductible + CRDS (réintégrées dans l'assiette IR)
@@ -295,6 +317,8 @@ export function computeAll(params) {
     seuilIS, tauxISReduit, tauxISNormal,
     tauxFlatTax, abattementIR, revenuConjoint, partsFiscales,
     fiscNettePea = DEFAULTS.fiscNettePea,
+    psPension = DEFAULTS.psPension,
+    plafondAbattementPension = DEFAULTS.plafondAbattementPension,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
@@ -345,28 +369,15 @@ export function computeAll(params) {
   const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
 
   // --- IR (barème 2025) ---
+  // NB : l'abattement 10% sur salaires est plafonné à 14 171 € (CGI art. 83-3°, 2025).
+  // Ici non plafonné : écart < 100 € d'IR pour un salaire brut de 60k. Marginal.
   const netImposable = computeNetImposable(salaireBrut);
   const revenuImposableVous = netImposable * (1 - abattementIR);
   const revenuImposableConjoint = revenuConjoint * (1 - abattementIR);
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
   const quotientFamilial = revenuImposableFoyer / partsFiscales;
 
-  const tranches = [
-    { seuil: 0, taux: 0 },
-    { seuil: 11600, taux: 0.11 },
-    { seuil: 29579, taux: 0.30 },
-    { seuil: 84577, taux: 0.41 },
-    { seuil: 181917, taux: 0.45 },
-  ];
-
-  let irParPart = 0;
-  let tmi = 0;
-  for (let i = 1; i < tranches.length; i++) {
-    const plafond = i < tranches.length - 1 ? tranches[i + 1].seuil : Infinity;
-    const base = Math.max(0, Math.min(quotientFamilial, plafond) - tranches[i].seuil);
-    irParPart += base * tranches[i].taux;
-    if (base > 0) tmi = tranches[i].taux;
-  }
+  const { irParPart, tmi } = computeIR(quotientFamilial);
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
@@ -388,7 +399,8 @@ export function computeAll(params) {
   const resteSASUEstime = benefDistribuable - divBrutsSortis;
   const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendementScpi;
   const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
-  const fiscNettePerEff  = 1 - tmi * 0.90 - 0.091;  // rente PER : TMI × 90% (abattement pension) + PS pension 9,1%
+  // fiscNettePerEff, tmiRetraite : calculés après estimation du revenu en retraite (voir plus bas)
+  let fiscNettePerEff, tmiRetraite;
 
   // Contrat capi détenu par la SASU (CGI art. 238 septies E) :
   // - Pendant la détention : IS annuel sur forfait (versements nets × 105% × TME)
@@ -476,6 +488,36 @@ export function computeAll(params) {
   const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi, peaPerso, per: 0, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
+
+  // --- TMI retraite pour fiscalité PER ---
+  // La rente PER est perçue à 64+ ans, quand le revenu imposable est plus faible
+  // qu'en phase active. On estime la TMI sur le revenu réel en retraite :
+  // retraite base + complémentaire + rente PER brute × 90% (abattement pension 10%)
+  {
+    // Estimer le capital PER à 64 ans (contributions jusqu'à ageObjectif, puis capitalisation seule)
+    let perEstime64 = poolPerAvantRetrait;
+    const anneesCapiPer = Math.max(0, 64 - ageObjectif);
+    for (let i = 0; i < anneesCapiPer; i++) perEstime64 *= (1 + rendementPer);
+    const rentePerBruteEstimee = perEstime64 * tauxConversionPer;
+    // Revenu imposable en retraite : pensions + rente PER, abattement 10% plafonné
+    // CGI art. 158-5-a : abattement 10% sur pensions, plafond 4 399 € / foyer (2025)
+    const retraiteAnnuelleBrute = (retraiteBaseMois + retraiteCompMois) * 12;
+    const pensionsBrutesVous = retraiteAnnuelleBrute + rentePerBruteEstimee;
+    const abattementVous = Math.min(pensionsBrutesVous * abattementIR, plafondAbattementPension);
+    const revenuRetraiteVous = pensionsBrutesVous - abattementVous;
+    // Conjoint : on applique le même abattement 10% plafonné sur son revenu
+    const abattementConjoint = Math.min(revenuConjoint * abattementIR, plafondAbattementPension);
+    const revenuRetraiteConjoint = revenuConjoint - abattementConjoint;
+    const qfRetraite = (revenuRetraiteVous + revenuRetraiteConjoint) / partsFiscales;
+    tmiRetraite = computeIR(qfRetraite).tmi;
+    // Rente PER imposée comme pension (CGI art. 158-5-a) :
+    //   - Part imposable = rente brute − quote-part de l'abattement
+    //     (prorata : la rente PER partage le plafond avec les autres pensions)
+    //   - PS sur pensions de retraite : CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1%
+    //     (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
+    const ratioAbattement = pensionsBrutesVous > 0 ? abattementVous / pensionsBrutesVous : abattementIR;
+    fiscNettePerEff = 1 - tmiRetraite * (1 - ratioAbattement) - psPension;
+  }
 
   let drawdownAnnuelBrutAvant64 = 0;
   let drawdownAnnuelBrutApres64 = 0;
@@ -798,7 +840,7 @@ export function computeAll(params) {
     isReduit, isNormal, isTotal, tauxEffectifIS, benefDistribuable,
     divBrutsSortis, flatTax, divNets, divNetsMax, ratioDistrib,
     revenuImposableVous, revenuImposableConjoint, revenuImposableFoyer,
-    quotientFamilial, irFoyer, votreIR, tmi, fiscNetteScpiEff, fiscNettePerEff,
+    quotientFamilial, irFoyer, votreIR, tmi, tmiRetraite, fiscNetteScpiEff, fiscNettePerEff,
     netNetAnnuel, netNetMensuel,
     resteSASU, contratCapi, scpi, reserveTreso, peaPerso, per, epargneTotale,
     ijSecuMois, complementPrevoyance, totalCouvertMois, provisionRisque, capitalDeces,
