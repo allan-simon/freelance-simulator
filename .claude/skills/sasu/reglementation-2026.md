@@ -191,6 +191,18 @@ Cas de déblocage anticipé : achat résidence principale, invalidité, décès 
 - [Service Public — PER](https://www.service-public.gouv.fr/particuliers/vosdroits/F34982)
 - [Service Public — Réforme retraites](https://www.service-public.gouv.fr/particuliers/actualites/A18825)
 
+**Fiscalité sortie en rente :**
+- La rente PER est imposée comme une **pension** (pas comme un revenu du capital)
+- Abattement 10% (CGI art. 158-5-a, comme les pensions de retraite)
+- PS pension : CSG 8,3% (taux plein) + CRDS 0,5% + CASA 0,3% = **9,1%** (CSS L136-8 II)
+- **Pas** les PS capital (17,2%/18,6%) qui s'appliquent aux plus-values/dividendes
+- Pour TMI 30% : IR effectif = 30% × 90% = 27%, total prélèvements = 27% + 9,1% = 36,1% → **fiscNettePer = 0,639**
+
+**Sources primaires (fiscalité rente) :**
+- [CGI art. 158-5-a](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006307702) — abattement 10% sur pensions
+- [CSS art. L136-8 II](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036393375) — taux CSG sur pensions (8,3% taux plein)
+- [CSS art. L14-10-4](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048640522) — CASA 0,3%
+
 **Note** : la réforme retraites a été "suspendue" politiquement en 2025 mais l'âge légal reste à 64 ans tant qu'aucune nouvelle loi n'est votée. À surveiller.
 
 ## [9] Contrat de capitalisation luxembourgeois

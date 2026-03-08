@@ -27,7 +27,7 @@ export const DEFAULTS = {
   fiscNetteCapi: 0.686,  // Contrat capitalisation : PFU 31,4% (12,8% IR + 18,6% PS)
   fiscNetteScpi: 0.53,   // SCPI usufruit : revenus fonciers TMI 30% + PS 17,2% ≈ 47% (PS 18,6% ne s'applique PAS aux rev. fonciers)
   fiscNettePea:  0.814,  // PEA > 5 ans : PS seules 18,6%
-  fiscNettePer:  0.55,   // PER sortie rente : IR TMI ~30% + PS 17,2% (approx)
+  fiscNettePer:  0.639,  // PER sortie rente : IR TMI 30% × 0,90 (abattement pension) + PS pension 9,1% (CSG 8,3% + CRDS 0,5% + CASA 0,3%)
   seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
