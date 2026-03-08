@@ -22,7 +22,10 @@ export const DEFAULTS = {
   joursLeverLePied: 50,
   croquerCapital: false,
   ageFin: 80,
-  peaPerso: 2400, // versement annuel PEA personnel (200 €/mois) — plafond PEA 150k€ (CMF art. L221-30)
+  // Versement annuel PEA personnel (200 €/mois) — plafond PEA 150k€ de versements (CMF art. L221-30).
+  // Une fois le plafond atteint, l'excédent reste dans le net net (hypothèse assumée : pas de
+  // redirection vers une AV ou autre enveloppe perso, le modèle ne gère que le PEA côté perso).
+  peaPerso: 2400,
   per: 5000,
   tauxConversionPer: 0.035,  // taux de conversion rente viagère assureur à 64 ans (typiquement 3-4%)
   tme: 0.0345,  // Taux Moyen d'Emprunt d'État (figé à la souscription du contrat capi, CGI 238 septies E)
@@ -704,6 +707,8 @@ export function computeAll(params) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
         cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
+        // PEA plafonné à 150k€ de versements (CMF art. L221-30).
+        // L'excédent reste dans le net net du foyer (pas de redirection vers une autre enveloppe).
         const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
         cumPea = cumPea * (1 + rendementPea) + peaVersement1;
         cumPeaBase += peaVersement1;
