@@ -263,6 +263,7 @@ function getUrlParams() {
     ratioCapi: num('ratioCapi', DEFAULTS.ratioCapi),
     inflation: num('inflation', DEFAULTS.inflation),
     partsFiscales: num('partsFiscales', DEFAULTS.partsFiscales),
+    anneesAre: num('anneesAre', DEFAULTS.anneesAre),
   };
 }
 
@@ -293,6 +294,7 @@ export default function App() {
   const [ratioCapi, setRatioCapi] = useState(INIT.ratioCapi);
   const [inflation, setInflation] = useState(INIT.inflation);
   const [partsFiscales, setPartsFiscales] = useState(INIT.partsFiscales);
+  const [anneesAre] = useState(INIT.anneesAre); // read-only depuis l'URL, pas de slider UI
 
   const [frais] = useState(DEFAULTS.frais);
   const caHT = tjm * jours;
@@ -311,13 +313,13 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso
+    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso, anneesAre
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre]);
 
   // Monte Carlo — 500 simulations avec rendements stochastiques
-  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso]);
+  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -366,7 +368,7 @@ export default function App() {
     const text = '```\n' + formatReport({
       tjm, jours, salaireBrut: salaireBrutEffectif, per: perEffectif,
       divNetsVoulus: divNetsEffectif, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied,
-      croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r
+      croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, anneesAre, r
     }) + '\n```';
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);

@@ -66,6 +66,7 @@ export const DEFAULTS = {
   partsFiscales: 2.5,
   ageActuel: 36,
   inflation: 0.02,
+  anneesAre: 0, // années de maintien ARE avant rémunération SASU (0 = pas de phase ARE)
 };
 
 // Cotisations patronales détaillées — président SASU (assimilé salarié cadre)
@@ -215,6 +216,7 @@ export const RANGES = {
   joursLeverLePied: { min: 0, max: 150, step: 10 },
   ageFin: { min: 70, max: 95, step: 1 },
   inflation: { min: 0, max: 0.05, step: 0.005 },
+  anneesAre: { min: 0, max: 3, step: 1 },
 };
 
 // Calcule les contraintes dynamiques (max salary, max PER, max dividendes)
@@ -259,7 +261,7 @@ export function computeConstraints({
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89, fraisEntreeScpi = 0.10 }) {
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89, fraisEntreeScpi = 0.10, anneesAre = 0, contratCapiAre = 0, scpiAre = 0, perAre = 0 }) {
   let tc = 0, tcBase = 0, ts = 0, tsBase = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
@@ -267,14 +269,18 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
   // Rendement effectif = revalo + distrib × (1 − frais) = rendementScpi × (1 − partDistrib × frais)
   const rendementScpiEffectif = rendementScpi * (1 - partDistribScpi * fraisEntreeScpi);
   for (let y = 1; y <= annees; y++) {
+    const isAre = y <= anneesAre;
+    const ccY = isAre ? contratCapiAre : contratCapi;
+    const scY = isAre ? scpiAre : scpi; // net (après frais d'entrée)
+    const peY = isAre ? perAre : per;
     const infY = Math.pow(1 + inflation, y);
-    tc = tc * (1 + rendementCapi) + contratCapi * infY;
-    tcBase += contratCapi * infY;
+    tc = tc * (1 + rendementCapi) + ccY * infY;
+    tcBase += ccY * infY;
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
     const tsAvant = ts;
-    ts = ts * (1 + rendementScpiEffectif) + scpi * infY;
-    tsBase += scpi / (1 - fraisEntreeScpi) * infY; // base comptable = coût d'acquisition incluant frais
+    ts = ts * (1 + rendementScpiEffectif) + scY * infY;
+    tsBase += scY / (1 - fraisEntreeScpi) * infY; // base comptable = coût d'acquisition incluant frais
     // Les distributions réinvesties augmentent la base (coût d'acquisition des nouvelles parts)
     // Distribution brute − IS = net ; réinvesti avec frais → base = montant net après frais
     const distribBrut = tsAvant * rendementScpiDistrib;
@@ -285,8 +291,8 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     const peaV = Math.min(peaPerso * infY, Math.max(0, 150000 - tpBase));
     tp = tp * (1 + rendementPea) + peaV;
     tpBase += peaV;
-    tpe = tpe * (1 + rendementPer) + per * infY;
-    tpeBase += per * infY;
+    tpe = tpe * (1 + rendementPer) + peY * infY;
+    tpeBase += peY * infY;
   }
   return { total: tc + ts + tp + tpe, capiValue: tc, capiBase: tcBase, scpiValue: ts, scpiBase: tsBase, peaValue: tp, peaBase: tpBase, perValue: tpe, perBase: tpeBase };
 }
@@ -376,6 +382,27 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   };
 }
 
+// Calcul ARE (allocation chômage) basé sur le dernier salaire brut CDI
+// Sources : Code du travail art. R5422-1 et s. ; unedic.org
+// Formule : max(40,4% SJR + 13,11 €, 57% SJR), plafonné à 75% SJR
+// CSG/CRDS ~6,7% sur l'ARE brute
+export function computeARE(salaireBrutCDI) {
+  if (salaireBrutCDI <= 0) return { areJour: 0, areMensuelBrut: 0, areMensuelNet: 0 };
+  const sjr = salaireBrutCDI / 365;
+  const partieFix = 13.11; // partie fixe journalière (2025, revalorisée annuellement)
+  const areJour = Math.min(
+    Math.max(0.404 * sjr + partieFix, 0.57 * sjr),
+    0.75 * sjr
+  );
+  const areMensuelBrut = areJour * 30;
+  const areMensuelNet = areMensuelBrut * 0.933; // ~6,7% CSG/CRDS
+  return {
+    areJour: Math.round(areJour * 100) / 100,
+    areMensuelBrut: Math.round(areMensuelBrut),
+    areMensuelNet: Math.round(areMensuelNet),
+  };
+}
+
 // Moteur principal — IDENTIQUE à ce qui tourne dans l'UI
 export function computeAll(params) {
   const {
@@ -395,6 +422,7 @@ export function computeAll(params) {
     ratioTreso = 0.15, ratioCapi = 0.65,
     salaireBrutCDI = 45000,
     inflation = 0.02,
+    anneesAre = 0,
     rendementCapi: rendementCapi_ = rendementGlobal,
     rendementScpi: rendementScpi_ = rendementGlobal,
     rendementPea:  rendementPea_  = rendementGlobal,
@@ -563,6 +591,28 @@ export function computeAll(params) {
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
 
+  // --- Phase ARE : SASU avec 0 salaire, 0 dividende ---
+  // Pendant anneesAre années, le freelance vit de l'ARE et laisse tout le résultat en SASU.
+  // Pas d'acomptes IS la première année (base = IS N-1 qui n'existe pas).
+  let areResultatAvantIS = 0, areIS = 0, areBenefDistribuable = 0, areResteSASU = 0;
+  let areContratCapi = 0, areScpi = 0, areScpiNet = 0, areReserveTreso = 0, arePer = 0;
+  let areMensuelNet = 0;
+  const anneesAreEff = Math.min(anneesAre, ageObjectif - ageActuel); // cap à la durée freelance
+  if (anneesAreEff > 0) {
+    areResultatAvantIS = Math.max(0, caHT - totalFrais); // pas de superbrut (0 salaire)
+    areIS = Math.min(areResultatAvantIS, seuilIS) * tauxISReduit
+      + Math.max(0, areResultatAvantIS - seuilIS) * tauxISNormal;
+    areBenefDistribuable = areResultatAvantIS - areIS;
+    areResteSASU = areBenefDistribuable; // 0 dividendes
+    areContratCapi = areResteSASU * ratioCapi;
+    areScpi = areResteSASU * ratioScpi;
+    areScpiNet = areScpi * (1 - fraisEntreeScpi);
+    areReserveTreso = areResteSASU * ratioTreso;
+    arePer = per; // PER déjà inclus dans totalFrais → même montant
+    const are = computeARE(salaireBrutCDI);
+    areMensuelNet = are.areMensuelNet;
+  }
+
   // --- Net net (après épargne perso) ---
   const netNetAnnuel = salaireNet + divNets - votreIR + frais.chequesVacances * (1 - ASSIETTE_CSG * TAUX_CSG_CRDS) - peaPerso;
   const netNetMensuel = netNetAnnuel / 12;
@@ -599,8 +649,9 @@ export function computeAll(params) {
   // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
   const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
   const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime), partDistribScpi, fraisEntreeScpi };
+  const areArgs = anneesAreEff > 0 ? { anneesAre: anneesAreEff, contratCapiAre: areContratCapi, scpiAre: areScpiNet, perAre: arePer } : {};
   const rendements = { rendementCapi, rendementScpi, rendementPea, rendementPer };
-  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
+  const projAtObjectif = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per, ...rendements, annees, inflation, ...projArgs, ...areArgs });
   const capitalAtObjectif = projAtObjectif.total;
   // projHorsPer calculé plus bas (rendement pondéré) — on y extrait aussi capitalHorsPerAtObjectif
   let capitalHorsPerAtObjectif;
@@ -616,8 +667,8 @@ export function computeAll(params) {
   // La formule d'annuité PV×r/(1-(1+r)^-n) suppose PV = pool AVANT la première croissance.
   // La provision pour risque couvre les aléas lissés → s'amortit linéairement, pas drainable.
   const anneesContrib = Math.max(0, annees - 1);
-  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
-  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, ...rendements, annees: anneesContrib, inflation, ...projArgs }).total;
+  const poolHorsPerAvantRetrait = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees: anneesContrib, inflation, ...projArgs, ...areArgs, perAre: 0 }).total;
+  const poolPerAvantRetrait = computeCapitalProjection({ contratCapi: 0, scpi: 0, peaPerso: 0, per, ...rendements, annees: anneesContrib, inflation, ...projArgs, anneesAre: anneesAreEff, contratCapiAre: 0, scpiAre: 0, perAre: arePer }).total;
   const poolTotalAvantRetrait = poolHorsPerAvantRetrait + poolPerAvantRetrait;
 
   // --- TMI retraite pour fiscalité PER ---
@@ -670,7 +721,7 @@ export function computeAll(params) {
   // - SCPI : IS sur les distributions (loyers) = rendementDistrib × valeur → drag direct
   // - PEA : pas de drag fiscal annuel (PS uniquement au retrait, > 5 ans)
   // Pondération par les encours estimés à l'objectif (pas les ratios d'allocation initiale)
-  const projHorsPer = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs });
+  const projHorsPer = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per: 0, ...rendements, annees, inflation, ...projArgs, ...areArgs, perAre: 0 });
   capitalHorsPerAtObjectif = projHorsPer.total;
   const vCapi = projHorsPer.capiValue, vScpi = projHorsPer.scpiValue, vPea = projHorsPer.peaValue;
   const totalHorsPer = vCapi + vScpi + vPea;
@@ -824,12 +875,18 @@ export function computeAll(params) {
       // donc le résultat net et l'épargne croissent proportionnellement.
       const infY = Math.pow(1 + inflation, y);
       let actualWithdrawal = 0;
+      const isAre = anneesAreEff > 0 && y <= anneesAreEff;
       if (phase === 1) {
-        cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
-        cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
+        // ARE boost : contributions SASU majorées (0 salaire, 0 dividende)
+        const ccY = isAre ? areContratCapi : contratCapi;
+        const scNetY = isAre ? areScpiNet : scpiNet;
+        const scGrossY = isAre ? areScpi : scpi;
+        const perY = isAre ? arePer : per;
+        cumCapi = cumCapi * (1 + rendementCapi) + ccY * infY;
+        cumCapiBase += ccY * infY;  // coût d'acquisition : seuls les versements, pas les gains
         const cumScpiAvant = cumScpi;
-        cumScpi = cumScpi * (1 + rendementScpiEffectif) + scpiNet * infY;
-        cumScpiBase += scpi * infY; // base comptable = coût d'acquisition incluant frais de souscription
+        cumScpi = cumScpi * (1 + rendementScpiEffectif) + scNetY * infY;
+        cumScpiBase += scGrossY * infY; // base comptable = coût d'acquisition incluant frais de souscription
         // Distributions réinvesties : augmentent la base (évite double taxation à la cession)
         const distribScpiBrut = cumScpiAvant * rendementScpiDistrib;
         const distribScpiNetIS = distribScpiBrut * (1 - tauxISMoyen(distribScpiBrut));
@@ -839,8 +896,8 @@ export function computeAll(params) {
         const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
         cumPea = cumPea * (1 + rendementPea) + peaVersement1;
         cumPeaBase += peaVersement1;
-        cumPer = cumPer * (1 + rendementPer) + per * infY;
-        cumPerBase += per * infY;
+        cumPer = cumPer * (1 + rendementPer) + perY * infY;
+        cumPerBase += perY * infY;
       } else if (croquerCapital) {
         // PER bloqué jusqu'à 64 ans : il grossit mais on ne le ponctione pas
         const perDebloque = age >= 64;
@@ -928,7 +985,7 @@ export function computeAll(params) {
       // Phase 2 → missions ponctuelles + placements
       // Phase 3 → placements seuls
       const resultatMissionsY = phase === 2 ? resultatMissions * infY : 0;
-      const resultatExploitationY = phase === 1 ? resultatAvantIS * infY : resultatMissionsY;
+      const resultatExploitationY = phase === 1 ? (isAre ? areResultatAvantIS : resultatAvantIS) * infY : resultatMissionsY;
       const totalResultatSociete = resultatExploitationY + totalRevenuPlacements;
       const isTotalSociete = Math.min(totalResultatSociete, seuilIS) * tauxISReduit
         + Math.max(0, totalResultatSociete - seuilIS) * tauxISNormal;
@@ -1002,7 +1059,10 @@ export function computeAll(params) {
       // correct. Mais si revenuConjoint est élevé, le foyer doit de l'IR non modélisé ici.
       // Pour corriger il faudrait calculer l'IR barème du foyer année par année en phases 2-3.
       let revenuTotalMois;
-      if (phase === 1) {
+      if (phase === 1 && isAre) {
+        // ARE : revenu perso = allocation chômage (montant nominal fixe, pas d'inflation)
+        revenuTotalMois = Math.round(areMensuelNet - peaPerso / 12);
+      } else if (phase === 1) {
         revenuTotalMois = inflate(Math.round(netNetMensuel));
       } else if (croquerCapital) {
         revenuTotalMois = Math.round(drawdownMois + missionsMois + retraiteMois);
@@ -1019,7 +1079,9 @@ export function computeAll(params) {
       const revenuPassifReel = Math.round(deflate(croquerCapital ? drawdownMois : revenuPassifNet, y));
       const perRenteMoisReel = Math.round(deflate(perRenteMois, y));
       let revenuTotalMoisReel;
-      if (phase === 1) {
+      if (phase === 1 && isAre) {
+        revenuTotalMoisReel = Math.round(deflate(areMensuelNet - peaPerso / 12, y));
+      } else if (phase === 1) {
         revenuTotalMoisReel = Math.round(netNetMensuel);
       } else if (croquerCapital) {
         // Retraite en réel : base = valeur constante, complémentaire érodée par sous-indexation
@@ -1042,7 +1104,7 @@ export function computeAll(params) {
         retraiteMois, perRenteMois, missionsMois, drawdownMois,
         revenuTotalMois,
         totalReel, revenuTotalMoisReel,
-        label: phase === 1 ? "Freelance" : phase === 2 ? "Lever le pied" : "Retraite"
+        label: phase === 1 ? (isAre ? "ARE" : "Freelance") : phase === 2 ? "Lever le pied" : "Retraite"
       });
     }
   }
@@ -1068,6 +1130,11 @@ export function computeAll(params) {
       annees,
       inflation,
       ...projArgs,
+      // ARE : pendant les premières années, capitalisation boost (ratio n'affecte pas la phase ARE)
+      anneesAre: anneesAreEff,
+      contratCapiAre: areResteSASU * ratioCapi,
+      scpiAre: areResteSASU * ratioScpi * (1 - fraisEntreeScpi),
+      perAre: arePer,
     });
     const capitalFin = projScenario.total;
     const fiscScenario = fiscalitePonderee(projScenario.capiValue, projScenario.capiBase, projScenario.scpiValue, projScenario.scpiBase, projScenario.peaValue, projScenario.peaBase, per, true, 0, projScenario.perBase);
@@ -1100,7 +1167,10 @@ export function computeAll(params) {
     retraiteBaseMois, retraiteCompMois, retraiteTotaleMois, ageRetraite,
     capitalAtObjectif, capitalHorsPerAtObjectif, drawdownMensuelNet, drawdownAnnuelBrut,
     drawdownAnnuelBrutAvant64, drawdownAnnuelBrutApres64,
-    joursMissionsPonctuelles, revenuMissionsAnnuel, inflation
+    joursMissionsPonctuelles, revenuMissionsAnnuel, inflation,
+    // ARE
+    anneesAre: anneesAreEff, areResultatAvantIS, areIS, areBenefDistribuable,
+    areResteSASU, areContratCapi, areScpi, areReserveTreso, areMensuelNet,
   };
 }
 
@@ -1555,8 +1625,9 @@ export function computeMonteCarloProjection(params, det, {
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
-export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, r }) {
-  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendementCapi ${rendementCapi} --rendementScpi ${rendementScpi} --rendementPea ${rendementPea} --rendementPer ${rendementPer} --inflation ${inflation} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}`;
+export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, anneesAre, r }) {
+  const areFlag = r.anneesAre > 0 ? ` --anneesAre ${r.anneesAre} --salaireBrutCDI ${salaireBrutCDI}` : '';
+  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendementCapi ${rendementCapi} --rendementScpi ${rendementScpi} --rendementPea ${rendementPea} --rendementPer ${rendementPer} --inflation ${inflation} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}${areFlag}`;
 
   const L = [];
   L.push(`$ ${cmd}`);
@@ -1597,6 +1668,20 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   L.push(`    Épargne totale/an : ${fmt(r.epargneTotale)}`);
   L.push('');
 
+  // ARE phase (si activée)
+  if (r.anneesAre > 0) {
+    L.push(`  ═══ PHASE ARE (${r.anneesAre} an${r.anneesAre > 1 ? 's' : ''}) ═══`);
+    L.push(`  Revenu perso      : ${fmt(r.areMensuelNet)}/mois (ARE, basé sur ${fmt(salaireBrutCDI)} brut CDI)`);
+    L.push(`  SASU (0 salaire, 0 dividende) :`);
+    L.push(`    Résultat av. IS : ${fmt(r.areResultatAvantIS)}`);
+    L.push(`    IS              : ${fmt(r.areIS)}`);
+    L.push(`    Reste en SASU   : ${fmt(r.areResteSASU)}`);
+    L.push(`    Contrat capi    : ${fmt(r.areContratCapi)}`);
+    L.push(`    SCPI            : ${fmt(r.areScpi)}`);
+    L.push(`    Provision risque: ${fmt(r.areReserveTreso)}`);
+    L.push('');
+  }
+
   // Step 4
   L.push(`═══ STEP 4 : PROJECTION LONG TERME ═══`);
   L.push(`  Rendement capi  : ${fmtPct(rendementCapi)} | SCPI : ${fmtPct(rendementScpi)} | PEA : ${fmtPct(rendementPea)} | PER : ${fmtPct(rendementPer)}`);
@@ -1616,6 +1701,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
     L.push('  ' + '─'.repeat(90));
   }
   const keyAges = new Set([ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
+  if (r.anneesAre > 0) keyAges.add(ageActuel + r.anneesAre); // fin de la phase ARE
   for (const p of r.projection) {
     if (keyAges.has(p.age)) {
       if (inflation > 0) {
@@ -1649,7 +1735,12 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   const age67 = r.projection.find(p => p.age === 67);
   const age75 = r.projection.find(p => p.age === 75);
   L.push('  Jalons de vie (€ 2026) :');
-  L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);
+  if (r.anneesAre > 0) {
+    L.push(`    ARE (maintenant)     : ${fmt(r.areMensuelNet)}/mois (chômage) + SASU capitalise ${fmt(r.areResteSASU)}/an`);
+    L.push(`    Freelance (${ageActuel + r.anneesAre} ans)   : ${fmt(r.netNetMensuel)}/mois`);
+  } else {
+    L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);
+  }
   if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age50.totalReel)}`);
   if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age64.totalReel)}`);
   if (age67) L.push(`    67 ans (retraite)     : ${fmt(age67.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age67.totalReel)}`);
