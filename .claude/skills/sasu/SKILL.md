@@ -110,7 +110,7 @@ L'app est déployée sur GitHub Pages et accepte les query params. Après chaque
 https://allan-simon.github.io/freelance-simulator/?tjm=1200&jours=220&salaireBrut=60000&per=5000&divNetsVoulus=40000&rendementCapi=0.06&rendementScpi=0.045&ageObjectif=50&joursLeverLePied=50&croquerCapital=false&ageFin=80&ratioTreso=0.15&ratioCapi=0.65
 ```
 
-N'inclure que les paramètres qui diffèrent des défauts. Les params disponibles sont : `tjm`, `jours`, `salaireBrut`, `divNetsVoulus`, `rendementCapi`, `rendementScpi`, `rendementPea`, `rendementPer`, `rendement` (fallback legacy), `ageObjectif`, `joursLeverLePied`, `croquerCapital`, `ageFin`, `per`, `ratioTreso`, `ratioCapi`, `ageActuel`, `peaPerso`, `salaireBrutCDI`, `inflation`, `partsFiscales`.
+N'inclure que les paramètres qui diffèrent des défauts. Pour connaître les params disponibles et leurs valeurs par défaut, consulte `DEFAULTS` dans `src/model.js` — les clés de cet objet correspondent aux query params de l'URL (et aux flags CLI).
 
 ## Ton style
 
