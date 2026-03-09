@@ -49,7 +49,7 @@ export const DEFAULTS = {
   psPea: 0.186, // PEA > 5 ans : PS seules 18,6% sur les gains (CSG 9,2% + CRDS 0,5% + PS 7,5% + contrib. add. 1,4%)
   // PS sur pensions de retraite (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
   psPension: 0.091,      // CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1% (taux plein, non exonéré)
-  plafondAbattementPension: 4399, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, 2025)
+  plafondAbattementPension: 4439, // plafond abattement 10% pensions par foyer (CGI art. 158-5-a, revenus 2025)
   plafondAbattementSalaire: 14171, // plafond abattement 10% salaires (CGI art. 83-3°, 2025)
   margeSecurite: 0.005, // marge 0,5 pt sur le taux de retrait (prudence vs rendements futurs incertains)
   seuilIS: 42500,
@@ -59,8 +59,9 @@ export const DEFAULTS = {
   // 40% peut être plus avantageuse si TMI ≤ 11% (rare avec les paramètres par défaut, TMI 30%).
   tauxFlatTax: 0.314,
   abattementIR: 0.10,
-  // ⚠ Hypothèse : revenu conjoint constant à vie (actif et retraite). Si le conjoint prend
-  // sa retraite avec un revenu très différent, le tmiRetraite et l'IR du foyer divergent.
+  // ⚠ Hypothèse : conjoint salarié du même âge, revenu constant à vie (même montant en
+  // activité et en retraite). En phase retraite, ce revenu est traité comme pension (soumis
+  // au plafond d'abattement pension partagé avec le déclarant, pas au plafond salaire).
   revenuConjoint: 16800,
   partsFiscales: 2.5,
   ageActuel: 36,
@@ -172,6 +173,8 @@ function computeIRBrut(quotientFamilial) {
 }
 // Plafonnement du quotient familial (CGI art. 197-I-2) :
 // L'avantage procuré par chaque demi-part au-delà de 2 parts (couple) est plafonné.
+// ⚠ Hypothèse : foyer = couple marié/pacsé (base 2 parts). Un parent isolé (1 part + 0,5)
+// a une demi-part majorée avec un plafond différent (~3 959 € au lieu de 1 759 €).
 function computeIR(quotientFamilial, parts = 2) {
   const result = computeIRBrut(quotientFamilial);
   if (parts <= 2) return result;
@@ -629,7 +632,7 @@ export function computeAll(params) {
     // En sortie capital, pas de rente → ne pas gonfler la TMI avec une rente fictive
     const rentePerBruteEstimee = croquerCapital ? 0 : perEstime64 * tauxConversionPer;
     // Revenu imposable en retraite : pensions + rente PER, abattement 10% plafonné
-    // CGI art. 158-5-a : abattement 10% sur pensions, plafond 4 399 € / foyer (2025)
+    // CGI art. 158-5-a : abattement 10% sur pensions, plafond 4 439 € / foyer (revenus 2025)
     const retraiteAnnuelleBrute = (retraiteBaseMois + retraiteCompMois) * 12;
     const pensionsBrutesVous = retraiteAnnuelleBrute + rentePerBruteEstimee;
     // Abattement 10% plafonné à plafondAbattementPension pour le FOYER (CGI 158-5-a)
