@@ -1,6 +1,10 @@
 // ============================================================
 // MOTEUR DE CALCUL — Source unique de vérité
 // Utilisé par App.jsx (React) ET cli.js (Node)
+//
+// Hypothèses structurelles non modélisées :
+// - Pas de liquidation SASU : le boni de liquidation (flat tax) est fiscalement quasi-identique
+//   à des rachats progressifs. Coût de liquidation (~2-3k€) non comptabilisé.
 // ============================================================
 
 export const DEFAULTS = {
@@ -51,8 +55,12 @@ export const DEFAULTS = {
   seuilIS: 42500,
   tauxISReduit: 0.15,
   tauxISNormal: 0.25,
+  // ⚠ Hypothèse : PFU (flat tax) sur les dividendes. L'option barème progressif avec abattement
+  // 40% peut être plus avantageuse si TMI ≤ 11% (rare avec les paramètres par défaut, TMI 30%).
   tauxFlatTax: 0.314,
   abattementIR: 0.10,
+  // ⚠ Hypothèse : revenu conjoint constant à vie (actif et retraite). Si le conjoint prend
+  // sa retraite avec un revenu très différent, le tmiRetraite et l'IR du foyer divergent.
   revenuConjoint: 16800,
   partsFiscales: 2.5,
   ageActuel: 36,
@@ -529,6 +537,9 @@ export function computeAll(params) {
   const scpi = resteSASU * ratioScpi;
   const scpiNet = scpi * (1 - fraisEntreeScpi); // montant effectivement investi après frais de souscription
   // peaPerso : paramètre (DEFAULTS.peaPerso = 2400 €/an)
+  // ⚠ Hypothèse : PER Entreprise (ex-art. 83), déduit du résultat IS de la SASU.
+  // Un PER Individuel serait déduit de l'IR personnel (plafond 10% revenus pro) — non modélisé.
+  // Pour un freelance SASU optimisé, le PER entreprise est le choix standard.
   const per = frais.per;
   const epargneTotale = contratCapi + scpi + peaPerso + per;
 
@@ -654,6 +665,9 @@ export function computeAll(params) {
   // PEA : drag = 0 (pas d'imposition annuelle)
   const dragFiscalMoyen = wCapi * dragFiscalCapi + wScpi * dragFiscalScpi;
   // Rendement nominal pondéré de toutes les enveloppes hors PER
+  // ⚠ Hypothèse : pondération figée à ageObjectif. Pendant le drawdown, la composition évolue
+  // (le PEA résiste mieux car pas de drag fiscal annuel → poids relatif croissant → rendement
+  // pondéré réel légèrement supérieur). La marge de sécurité (0,5 pt) absorbe ce conservatisme.
   const rendementPondereHorsPer = wCapi * rendementCapi + wScpi * rendementScpi + wPea * rendementPea;
   const rendementNetDrag = Math.max(0, rendementPondereHorsPer - dragFiscalMoyen);
 
