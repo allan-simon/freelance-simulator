@@ -269,10 +269,16 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     tcBase += contratCapi * infY;
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
+    const tsAvant = ts;
     ts = ts * (1 + rendementScpiEffectif) + scpi * infY;
     tsBase += scpi / (1 - fraisEntreeScpi) * infY; // base comptable = coût d'acquisition incluant frais
+    // Les distributions réinvesties augmentent la base (coût d'acquisition des nouvelles parts)
+    // Distribution brute − IS = net ; réinvesti avec frais → base = montant net après frais
+    const distribBrut = tsAvant * rendementScpiDistrib;
+    const distribNetIS = distribBrut * (1 - tauxISEffectif);
+    tsBase += distribNetIS * (1 - fraisEntreeScpi);
     // IS annuel sur les distributions SCPI (loyers)
-    if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
+    if (ts > 0) ts = Math.max(0, ts - distribBrut * tauxISEffectif);
     const peaV = Math.min(peaPerso * infY, Math.max(0, 150000 - tpBase));
     tp = tp * (1 + rendementPea) + peaV;
     tpBase += peaV;
@@ -571,11 +577,11 @@ export function computeAll(params) {
   const ageRetraite = 67;
   const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif });
   // Phase 2 "lever le pied" : modèle de coûts propre
-  // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle)
+  // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle, prévoyance)
   // CA missions → résultat → IS → dividendes flat tax
   const joursMissionsPonctuelles = joursLeverLePied;
   const caMissions = tjm * joursMissionsPonctuelles;
-  const fraisPhase2 = (frais.comptable || 0) + (frais.rcPro || 0) + (frais.cfe || 0) + (frais.banque || 0) + (frais.mutuelle || 0);
+  const fraisPhase2 = (frais.comptable || 0) + (frais.rcPro || 0) + (frais.cfe || 0) + (frais.banque || 0) + (frais.mutuelle || 0) + (frais.prevoyance || 0);
   const resultatMissions = Math.max(0, caMissions - fraisPhase2);
   const isMissions = Math.min(resultatMissions, seuilIS) * tauxISReduit + Math.max(0, resultatMissions - seuilIS) * tauxISNormal;
   const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
@@ -766,8 +772,13 @@ export function computeAll(params) {
       if (phase === 1) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
+        const cumScpiAvant = cumScpi;
         cumScpi = cumScpi * (1 + rendementScpiEffectif) + scpiNet * infY;
         cumScpiBase += scpi * infY; // base comptable = coût d'acquisition incluant frais de souscription
+        // Distributions réinvesties : augmentent la base (évite double taxation à la cession)
+        const distribScpiBrut = cumScpiAvant * rendementScpiDistrib;
+        const distribScpiNetIS = distribScpiBrut * (1 - tauxISMoyen(distribScpiBrut));
+        cumScpiBase += distribScpiNetIS * (1 - fraisEntreeScpi);
         // PEA plafonné à 150k€ de versements (CMF art. L221-30).
         // L'excédent reste dans le net net du foyer (pas de redirection vers une autre enveloppe).
         const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
@@ -872,6 +883,10 @@ export function computeAll(params) {
         const ratioPlacements = totalRevenuPlacements / totalResultatSociete;
         const isPlacements = isTotalSociete * ratioPlacements;
         if (forfaitAnnuel > 0) {
+          // ⚠ Limitation assumée : l'IS forfaitaire est déduit directement de cumCapi.
+          // En réalité la SASU paie l'IS depuis sa trésorerie ; en phases 2-3 sans activité,
+          // elle ferait un rachat partiel qui déclenche une régularisation (gain réel vs forfait
+          // cumulé) non modélisée ici. Impact faible et compensé (pas de drag au rachat).
           cumCapi = Math.max(0, cumCapi - isPlacements * (forfaitAnnuel / totalRevenuPlacements));
           cumForfaitsIS += forfaitAnnuel;
         }
@@ -927,6 +942,10 @@ export function computeAll(params) {
       const peaPhase2 = (!croquerCapital && phase === 2) ? Math.min(peaPerso / 2 * infY, revenuMissionsNet) : 0;
       const missionsMois = phase === 2 ? Math.round((revenuMissionsNet - peaPhase2) / 12) : 0;
 
+      // ⚠ Limitation assumée : en phases 2-3, l'IR foyer (revenu conjoint + pensions) n'est pas
+      // retranché. Avec les défauts (conjoint 16 800 €, 2.5 parts → QF ~6 000 € → TMI 0%), c'est
+      // correct. Mais si revenuConjoint est élevé, le foyer doit de l'IR non modélisé ici.
+      // Pour corriger il faudrait calculer l'IR barème du foyer année par année en phases 2-3.
       let revenuTotalMois;
       if (phase === 1) {
         revenuTotalMois = inflate(Math.round(netNetMensuel));
