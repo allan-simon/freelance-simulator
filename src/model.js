@@ -1110,12 +1110,12 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   const age64 = r.projection.find(p => p.age === 64);
   const age67 = r.projection.find(p => p.age === 67);
   const age75 = r.projection.find(p => p.age === 75);
-  L.push('  Jalons de vie :');
+  L.push('  Jalons de vie (€ 2026) :');
   L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);
-  if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMois)}/mois | patrimoine ${fmt(age50.total)}`);
-  if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMois)}/mois | patrimoine ${fmt(age64.total)}`);
-  if (age67) L.push(`    67 ans (retraite)     : ${fmt(age67.revenuTotalMois)}/mois | patrimoine ${fmt(age67.total)}`);
-  if (age75) L.push(`    75 ans                : ${fmt(age75.revenuTotalMois)}/mois | patrimoine ${fmt(age75.total)}`);
+  if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age50.totalReel)}`);
+  if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age64.totalReel)}`);
+  if (age67) L.push(`    67 ans (retraite)     : ${fmt(age67.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age67.totalReel)}`);
+  if (age75) L.push(`    75 ans                : ${fmt(age75.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age75.totalReel)}`);
 
   return L.join('\n');
 }
