@@ -695,25 +695,25 @@ export function computeAll(params) {
         ? poolTotalAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesDrawdown))
         : 0;
     } else {
-      // Phase 1 : avant 64, on consomme le capital hors PER
-      if (anneesAvant64 > 0) {
-        drawdownAnnuelBrutAvant64 = poolHorsPerAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesAvant64));
-      }
-      // Phase 2 : à 64 ans, sortie PER en capital fractionné (art. L224-1 CMF) → rejoint le pool
-      if (anneesApres64 > 0) {
-        // Le PER a grossi (contributions jusqu'à ageObjectif, puis capitalisation seule jusqu'à 64)
-        // PER : pas de drag fiscal en phase capitalisation
-        let perAt64 = poolPerAvantRetrait;
-        for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendementPer);
-        // Capital hors PER (capi + SCPI) : croît au rendement net du drag fiscal IS
-        let soldeHorsPer = poolHorsPerAvantRetrait;
-        for (let i = 0; i < anneesAvant64; i++) {
-          soldeHorsPer = soldeHorsPer * (1 + rendementNetDrag) - drawdownAnnuelBrutAvant64 * Math.pow(1 + inflation, i);
-        }
-        soldeHorsPer = Math.max(0, soldeHorsPer);
-        const capitalTotal64 = soldeHorsPer + perAt64;
-        drawdownAnnuelBrutApres64 = capitalTotal64 * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesApres64));
-      }
+      // Annuité lissée : un seul drawdown constant (en pouvoir d'achat) de ageObjectif à ageFin.
+      // Le PER est bloqué avant 64 → il rejoint le pool comme injection ponctuelle à 64.
+      // On résout A tel que :
+      //   1. Le pool hors PER (P1) est drainé à A pendant n1 ans au taux réel r
+      //   2. À l'année n1, le PER (perAt64) rejoint le solde restant
+      //   3. Le pool combiné est drainé à A pendant n2 ans, atteignant 0
+      // Solution : A = (P1 × (1+r)^n1 + perAt64) / (ann1 + pv2)
+      //   où ann1 = ((1+r)^n1 − 1) / r, pv2 = (1 − (1+r)^(−n2)) / r
+      let perAt64 = poolPerAvantRetrait;
+      for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendementPer);
+
+      const fv1 = Math.pow(1 + tauxReel, anneesAvant64);
+      const ann1 = anneesAvant64 > 0 ? (fv1 - 1) / tauxReel : 0;
+      const pv2 = anneesApres64 > 0 ? (1 - Math.pow(1 + tauxReel, -anneesApres64)) / tauxReel : 0;
+      const drawdownLisse = (ann1 + pv2) > 0
+        ? (poolHorsPerAvantRetrait * fv1 + perAt64) / (ann1 + pv2)
+        : 0;
+      drawdownAnnuelBrutAvant64 = drawdownLisse;
+      drawdownAnnuelBrutApres64 = drawdownLisse;
     }
   }
   // Pour la compatibilité : drawdownAnnuelBrut est celui de la première phase
@@ -766,7 +766,8 @@ export function computeAll(params) {
         // PER bloqué jusqu'à 64 ans : il grossit mais on ne le ponctione pas
         const perDebloque = age >= 64;
         // Annuité indexée sur l'inflation → pouvoir d'achat constant
-        const anneesDepuisPhase = perDebloque
+        // Si drawdown lissé (avant64 === après64), compteur continu pour éviter un saut à 64
+        const anneesDepuisPhase = (perDebloque && drawdownAnnuelBrutAvant64 !== drawdownAnnuelBrutApres64)
           ? age - Math.max(ageObjectif, 64)
           : age - ageObjectif;
         const baseDrawdown = perDebloque ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
