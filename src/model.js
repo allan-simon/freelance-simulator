@@ -260,13 +260,16 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
   let tc = 0, tcBase = 0, ts = 0, tsBase = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
+  // Distributions réinvesties en SCPI → frais de souscription sur la part distribution
+  // Rendement effectif = revalo + distrib × (1 − frais) = rendementScpi × (1 − partDistrib × frais)
+  const rendementScpiEffectif = rendementScpi * (1 - partDistribScpi * fraisEntreeScpi);
   for (let y = 1; y <= annees; y++) {
     const infY = Math.pow(1 + inflation, y);
     tc = tc * (1 + rendementCapi) + contratCapi * infY;
     tcBase += contratCapi * infY;
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
-    ts = ts * (1 + rendementScpi) + scpi * infY;
+    ts = ts * (1 + rendementScpiEffectif) + scpi * infY;
     tsBase += scpi / (1 - fraisEntreeScpi) * infY; // base comptable = coût d'acquisition incluant frais
     // IS annuel sur les distributions SCPI (loyers)
     if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
@@ -396,6 +399,8 @@ export function computeAll(params) {
   // SCPI : seule la distribution (loyers) est imposable à l'IS chaque année.
   // La revalorisation des parts est une plus-value latente, imposée uniquement à la cession.
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
+  // Distributions réinvesties en SCPI → frais de souscription (~10%) sur la part distribution
+  const rendementScpiEffectif = rendementScpi * (1 - partDistribScpi * fraisEntreeScpi);
 
   // --- CA ---
   const caHT = tjm * jours;
@@ -615,7 +620,8 @@ export function computeAll(params) {
     let perEstime64 = poolPerAvantRetrait;
     const anneesCapiPer = Math.max(0, 64 - ageObjectif);
     for (let i = 0; i < anneesCapiPer; i++) perEstime64 *= (1 + rendementPer);
-    const rentePerBruteEstimee = perEstime64 * tauxConversionPer;
+    // En sortie capital, pas de rente → ne pas gonfler la TMI avec une rente fictive
+    const rentePerBruteEstimee = croquerCapital ? 0 : perEstime64 * tauxConversionPer;
     // Revenu imposable en retraite : pensions + rente PER, abattement 10% plafonné
     // CGI art. 158-5-a : abattement 10% sur pensions, plafond 4 399 € / foyer (2025)
     const retraiteAnnuelleBrute = (retraiteBaseMois + retraiteCompMois) * 12;
@@ -674,12 +680,19 @@ export function computeAll(params) {
   // ⚠ Hypothèse : pondération figée à ageObjectif. Pendant le drawdown, la composition évolue
   // (le PEA résiste mieux car pas de drag fiscal annuel → poids relatif croissant → rendement
   // pondéré réel légèrement supérieur). La marge de sécurité (0,5 pt) absorbe ce conservatisme.
-  const rendementPondereHorsPer = wCapi * rendementCapi + wScpi * rendementScpi + wPea * rendementPea;
+  const rendementPondereHorsPer = wCapi * rendementCapi + wScpi * rendementScpiEffectif + wPea * rendementPea;
   const rendementNetDrag = Math.max(0, rendementPondereHorsPer - dragFiscalMoyen);
 
   // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
   // Marge 0,5 point (même prudence que le mode rente perpétuelle) : le mode croquer capital
   // est plus risqué (capital à zéro si les rendements déçoivent) → au moins aussi prudent
+  //
+  // ⚠ Limitation assumée : le drawdown est calculé par formule d'annuité avec un taux blend fixe,
+  // alors que la simulation réelle applique des rendements distincts par enveloppe (6% capi, 4.5% SCPI,
+  // 7% PEA) avec des drags fiscaux différents. Le drawdown n'est jamais recalculé en cours de route,
+  // donc le capital ne finit pas exactement à zéro à ageFin (dérive cumulative sur 30+ ans).
+  // Pour corriger il faudrait une boucle itérative (bisection/Newton-Raphson) cherchant le drawdown
+  // qui épuise exactement le capital dans la simulation année par année — refacto significative.
   const tauxReel = Math.max(0.001, rendementNetDrag - inflation - margeSecurite);
 
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
@@ -753,7 +766,7 @@ export function computeAll(params) {
       if (phase === 1) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
-        cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
+        cumScpi = cumScpi * (1 + rendementScpiEffectif) + scpiNet * infY;
         cumScpiBase += scpi * infY; // base comptable = coût d'acquisition incluant frais de souscription
         // PEA plafonné à 150k€ de versements (CMF art. L221-30).
         // L'excédent reste dans le net net du foyer (pas de redirection vers une autre enveloppe).
@@ -775,7 +788,7 @@ export function computeAll(params) {
 
         // Pool de retrait : hors PER avant 64, tout après 64
         const poolCapi = cumCapi * (1 + rendementCapi);
-        const poolScpi = cumScpi * (1 + rendementScpi);
+        const poolScpi = cumScpi * (1 + rendementScpiEffectif);
         const poolPea = cumPea * (1 + rendementPea);
         const poolPer = cumPer * (1 + rendementPer);
 
@@ -818,7 +831,7 @@ export function computeAll(params) {
       } else {
         if (phase === 2) {
           cumCapi = cumCapi * (1 + rendementCapi);
-          cumScpi = cumScpi * (1 + rendementScpi);
+          cumScpi = cumScpi * (1 + rendementScpiEffectif);
           const peaContribBrut = Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY; // estimation (IS exact calculé plus bas)
           const peaContrib = Math.min(peaContribBrut, Math.max(0, PLAFOND_PEA - cumPeaBase));
           cumPea = cumPea * (1 + rendementPea) + peaContrib;
@@ -826,7 +839,7 @@ export function computeAll(params) {
           cumPer = cumPer * (1 + rendementPer);
         } else {
           cumCapi = cumCapi * (1 + rendementCapi);
-          cumScpi = cumScpi * (1 + rendementScpi);
+          cumScpi = cumScpi * (1 + rendementScpiEffectif);
           cumPea = cumPea * (1 + rendementPea);
           cumPer = cumPer * (1 + rendementPer);
         }
