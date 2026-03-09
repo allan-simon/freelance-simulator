@@ -20,7 +20,7 @@ Tu as accès à un simulateur financier complet via `node cli.js`. C'est ta sour
 node cli.js --step1 --tjm 1200 --jours 220
 node cli.js --step2 --tjm 1200 --jours 220
 node cli.js --step3 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000
-node cli.js --step4 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000 --rendement 0.06 --ageObjectif 50
+node cli.js --step4 --tjm 1200 --jours 220 --salaireBrut 60000 --per 5000 --divNetsVoulus 40000 --rendementCapi 0.06 --rendementScpi 0.045 --ageObjectif 50
 
 # Rapport complet (steps 1→4)
 node cli.js --step4 [tous les params]
@@ -29,17 +29,29 @@ node cli.js --step4 [tous les params]
 node cli.js --json [tous les params]
 
 # Paramètres supplémentaires
+--rendementCapi 0.06     # rendement contrat capi luxembourgeois (net de frais)
+--rendementScpi 0.045    # rendement SCPI (distribution + revalo, net de frais)
+--rendementPea 0.07      # rendement PEA personnel (ETF actions, net de TER)
+--rendementPer 0.05      # rendement PER (allocation mixte, net de frais)
+--rendement 0.06         # fallback unique pour les 4 enveloppes (legacy)
 --joursLeverLePied 50    # jours de missions en phase 2
 --croquerCapital true    # consommer le capital vs rente perpétuelle
 --ageFin 80              # âge cible si on croque le capital
 --ratioTreso 0.15        # part trésorerie dans le reste SASU
 --ratioCapi 0.65         # part contrat capi luxembourgeois
+--inflation 0.02         # inflation annuelle (revalorisation contributions)
+--ageActuel 36           # âge actuel du freelance
+--peaPerso 2400          # versement annuel PEA personnel (€/an)
+--salaireBrutCDI 45000   # salaire brut CDI avant freelance (pour retraite)
+--partsFiscales 2.5      # parts fiscales du foyer
 ```
 
 ### Paramètres par défaut
 - TJM : 1 200 € | Jours : 220 | Salaire brut : 60 000 € | PER : 5 000 €
-- Dividendes nets voulus : 40 000 € | Rendement : 6% | Objectif : 50 ans
+- Dividendes nets voulus : 40 000 € | Objectif : 50 ans | Inflation : 2%
+- Rendements : Capi 6% | SCPI 4,5% | PEA 7% | PER 5%
 - Jours lever le pied : 50 | Rente perpétuelle | Tréso 15% / Capi 65% / SCPI 20%
+- PEA perso : 2 400 €/an | Salaire brut CDI : 45 000 € | Parts fiscales : 2,5
 
 ## Comment travailler
 
@@ -95,10 +107,10 @@ Voir [guide-optimisation.md](guide-optimisation.md) pour les stratégies détail
 L'app est déployée sur GitHub Pages et accepte les query params. Après chaque scénario, génère un lien cliquable pour que l'utilisateur puisse explorer dans l'UI :
 
 ```
-https://allan-simon.github.io/freelance-simulator/?tjm=1200&jours=220&salaireBrut=60000&per=5000&divNetsVoulus=40000&rendement=0.06&ageObjectif=50&joursLeverLePied=50&croquerCapital=false&ageFin=80&ratioTreso=0.15&ratioCapi=0.65
+https://allan-simon.github.io/freelance-simulator/?tjm=1200&jours=220&salaireBrut=60000&per=5000&divNetsVoulus=40000&rendementCapi=0.06&rendementScpi=0.045&ageObjectif=50&joursLeverLePied=50&croquerCapital=false&ageFin=80&ratioTreso=0.15&ratioCapi=0.65
 ```
 
-N'inclure que les paramètres qui diffèrent des défauts. Les params disponibles sont : `tjm`, `jours`, `salaireBrut`, `divNetsVoulus`, `rendement`, `ageObjectif`, `joursLeverLePied`, `croquerCapital`, `ageFin`, `per`, `ratioTreso`, `ratioCapi`.
+N'inclure que les paramètres qui diffèrent des défauts. Les params disponibles sont : `tjm`, `jours`, `salaireBrut`, `divNetsVoulus`, `rendementCapi`, `rendementScpi`, `rendementPea`, `rendementPer`, `rendement` (fallback legacy), `ageObjectif`, `joursLeverLePied`, `croquerCapital`, `ageFin`, `per`, `ratioTreso`, `ratioCapi`, `ageActuel`, `peaPerso`, `salaireBrutCDI`, `inflation`, `partsFiscales`.
 
 ## Ton style
 
