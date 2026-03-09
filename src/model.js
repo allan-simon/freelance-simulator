@@ -248,7 +248,7 @@ export function computeConstraints({
 // Projection du capital à l'objectif — utilisé par le calcul principal ET le solveur
 // Les contributions croissent avec l'inflation (le CA/résultat croît avec le TJM)
 // Le forfait IS annuel (CGI 238 septies E : 105% TME × versements nets) est déduit du contrat capi
-export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89 }) {
+export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, rendementCapi, rendementScpi, rendementPea, rendementPer, annees, inflation = 0, tme = 0.0345, tauxISEffectif = 0.25, partDistribScpi = 0.89, fraisEntreeScpi = 0.10 }) {
   let tc = 0, tcBase = 0, ts = 0, tsBase = 0, tp = 0, tpBase = 0, tpe = 0, tpeBase = 0;
   const forfaitTME = 1.05 * tme;
   const rendementScpiDistrib = rendementScpi * partDistribScpi;
@@ -259,7 +259,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
     // Forfait IS annuel sur le contrat capi
     if (tcBase > 0) tc = Math.max(0, tc - tcBase * forfaitTME * tauxISEffectif);
     ts = ts * (1 + rendementScpi) + scpi * infY;
-    tsBase += scpi * infY;
+    tsBase += scpi / (1 - fraisEntreeScpi) * infY; // base comptable = coût d'acquisition incluant frais
     // IS annuel sur les distributions SCPI (loyers)
     if (ts > 0) ts = Math.max(0, ts - ts * rendementScpiDistrib * tauxISEffectif);
     const peaV = Math.min(peaPerso * infY, Math.max(0, 150000 - tpBase));
@@ -453,8 +453,8 @@ export function computeAll(params) {
   const resteSASUEstime = benefDistribuable - divBrutsSortis;
   const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendementScpiDistrib;
   const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
-  // fiscNettePerEff, tmiRetraite : calculés après estimation du revenu en retraite (voir plus bas)
-  let fiscNettePerEff, tmiRetraite;
+  // fiscNettePerEff, fiscNetteRetraite, tmiRetraite : calculés après estimation du revenu en retraite (voir plus bas)
+  let fiscNettePerEff, fiscNetteRetraite, tmiRetraite;
 
   // Contrat capi détenu par la SASU (CGI art. 238 septies E) :
   // - Pendant la détention : IS annuel sur forfait (versements nets × 105% × TME)
@@ -567,7 +567,7 @@ export function computeAll(params) {
   // On calcule le drawdown en excluant le PER avant 64 ans
   // Pour la projection, le forfait TME est petit → on estime le taux IS moyen applicable
   const forfaitEstime = (resteSASUEstime * ratioCapi) * 1.05 * tme;
-  const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime), partDistribScpi };
+  const projArgs = { tme, tauxISEffectif: tauxISMoyen(forfaitEstime), partDistribScpi, fraisEntreeScpi };
   const rendements = { rendementCapi, rendementScpi, rendementPea, rendementPer };
   const projAtObjectif = computeCapitalProjection({ contratCapi, scpi: scpiNet, peaPerso, per, ...rendements, annees, inflation, ...projArgs });
   const capitalAtObjectif = projAtObjectif.total;
@@ -622,7 +622,10 @@ export function computeAll(params) {
     //   - PS sur pensions de retraite : CSG 8,3% + CRDS 0,5% + CASA 0,3% = 9,1%
     //     (CSS art. L136-8-III, ord. 96-50 art. 14, CSS art. L14-10-4)
     const ratioAbattement = pensionsBrutesVous > 0 ? abattementVous / pensionsBrutesVous : abattementIR;
+    // Taux net applicable aux pensions (IR au barème + PS)
+    // Même formule pour retraite et rente PER (même plafond d'abattement, même prorata)
     fiscNettePerEff = 1 - tmiRetraite * (1 - ratioAbattement) - psPension;
+    fiscNetteRetraite = fiscNettePerEff;
   }
 
   let drawdownAnnuelBrutAvant64 = 0;
@@ -731,7 +734,7 @@ export function computeAll(params) {
         cumCapi = cumCapi * (1 + rendementCapi) + contratCapi * infY;
         cumCapiBase += contratCapi * infY;  // coût d'acquisition : seuls les versements, pas les gains
         cumScpi = cumScpi * (1 + rendementScpi) + scpiNet * infY;
-        cumScpiBase += scpiNet * infY;
+        cumScpiBase += scpi * infY; // base comptable = coût d'acquisition incluant frais de souscription
         // PEA plafonné à 150k€ de versements (CMF art. L221-30).
         // L'excédent reste dans le net net du foyer (pas de redirection vers une autre enveloppe).
         const peaVersement1 = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
@@ -882,9 +885,11 @@ export function computeAll(params) {
       // Complémentaire AGIRC-ARRCO : sous-indexée historiquement (ANI 2017, ~inflation − 0,3 pt/an)
       const sousIndexationArrco = 0.003; // 0,3 pt/an de sous-revalorisation vs inflation
       const facteurErosionArrco = Math.pow(1 - sousIndexationArrco, y);
-      const retraiteMois = phase === 3
+      // Retraite brute → nette d'IR et PS (même fiscalité que la rente PER : abattement 10% + TMI + PS)
+      const retraiteBrutMois = phase === 3
         ? Math.round(inflate(retraiteBaseMois) + inflate(retraiteCompMois) * facteurErosionArrco)
         : 0;
+      const retraiteMois = Math.round(retraiteBrutMois * (fiscNetteRetraite || 1));
       const peaPhase2 = (!croquerCapital && phase === 2) ? Math.min(peaPerso / 2 * infY, revenuMissionsNet) : 0;
       const missionsMois = phase === 2 ? Math.round((revenuMissionsNet - peaPhase2) / 12) : 0;
 
@@ -910,12 +915,12 @@ export function computeAll(params) {
         revenuTotalMoisReel = Math.round(netNetMensuel);
       } else if (croquerCapital) {
         // Retraite en réel : base = valeur constante, complémentaire érodée par sous-indexation
-        const retraiteMoisReel = phase === 3 ? Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco) : 0;
+        const retraiteMoisReel = phase === 3 ? Math.round((retraiteBaseMois + retraiteCompMois * facteurErosionArrco) * (fiscNetteRetraite || 1)) : 0;
         revenuTotalMoisReel = Math.round(deflate(drawdownMois, y) + Math.round(deflate(missionsMois, y)) + retraiteMoisReel);
       } else if (phase === 2) {
         revenuTotalMoisReel = Math.round(revenuPassifReel + Math.round(deflate(missionsMois, y)) + (perDebloque ? perRenteMoisReel : 0));
       } else {
-        const retraiteMoisReel = Math.round(retraiteBaseMois + retraiteCompMois * facteurErosionArrco);
+        const retraiteMoisReel = Math.round((retraiteBaseMois + retraiteCompMois * facteurErosionArrco) * (fiscNetteRetraite || 1));
         revenuTotalMoisReel = Math.round(revenuPassifReel + retraiteMoisReel + perRenteMoisReel);
       }
 
