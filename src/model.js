@@ -1102,6 +1102,450 @@ export function computeAll(params) {
 }
 
 // ============================================================
+// MONTE CARLO — Simulation stochastique avec rendements aléatoires
+// ============================================================
+
+// Box-Muller transform : génère une variable normale standard Z ~ N(0,1)
+function boxMullerZ() {
+  let u1;
+  do { u1 = Math.random(); } while (u1 === 0);
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// Student-t via ratio of normals : Z * sqrt(df / chi2), chi2 ~ Gamma(df/2, 2)
+// Produit des queues plus épaisses qu'une gaussienne (crises type 2008)
+// df=5 : kurtosis = 9 (vs 3 pour normal) — calibré sur rendements actions historiques
+function studentTZ(df = 5) {
+  // chi2 via somme de df normales² (simple et suffisant pour df petit)
+  let chi2 = 0;
+  for (let i = 0; i < df; i++) { const z = boxMullerZ(); chi2 += z * z; }
+  return boxMullerZ() * Math.sqrt(df / chi2);
+}
+
+// Décomposition de Cholesky 4×4 de la matrice de corrélation
+// Entrée : matrice symétrique définie positive (flat row-major 4×4)
+// Sortie : L triangulaire inférieure telle que L × L^T = corr
+function cholesky4(corr) {
+  const L = new Float64Array(16); // 4×4 row-major
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = 0;
+      for (let k = 0; k < j; k++) sum += L[i * 4 + k] * L[j * 4 + k];
+      if (i === j) {
+        L[i * 4 + j] = Math.sqrt(Math.max(0, corr[i * 4 + j] - sum));
+      } else {
+        L[i * 4 + j] = L[j * 4 + j] > 0 ? (corr[i * 4 + j] - sum) / L[j * 4 + j] : 0;
+      }
+    }
+  }
+  return L;
+}
+
+// Matrice de corrélation par défaut entre classes d'actifs
+// Ordre : [capi, scpi, pea, per]
+// Sources : corrélations historiques approximatives (actions/immo/mixte)
+// capi↔pea : 0.85 (tous deux equity-like, légèrement différents car FID vs ETF)
+// capi↔scpi : 0.20 (immo vs actions, corrélation faible)
+// capi↔per  : 0.60 (PER mixte contient ~50% actions)
+// pea↔scpi  : 0.15 (ETF actions vs immo)
+// pea↔per   : 0.55 (actions vs mixte)
+// scpi↔per  : 0.25 (immo vs mixte)
+const DEFAULT_CORR = [
+  //  capi   scpi   pea    per
+  1.00, 0.20, 0.85, 0.60,  // capi
+  0.20, 1.00, 0.15, 0.25,  // scpi
+  0.85, 0.15, 1.00, 0.55,  // pea
+  0.60, 0.25, 0.55, 1.00,  // per
+];
+
+// Mean reversion AR(1) sur les log-rendements annuels
+// phi < 0 : retour à la moyenne (une mauvaise année tend à être suivie d'une bonne)
+// Calibration historique S&P 500 : phi ≈ -0.15 sur rendements annuels (Poterba & Summers 1988)
+// SCPI : phi ≈ -0.05 (moins de mean reversion, marchés illiquides)
+const DEFAULT_PHI = {
+  capi: -0.15,
+  scpi: -0.05,
+  pea:  -0.15,
+  per:  -0.10,
+};
+
+// Génère N années de rendements corrélés, fat-tailed, mean-reverting
+// pour 4 classes d'actifs. Retourne { capi[], scpi[], pea[], per[] }
+function generateCorrelatedReturns(nYears, expectedReturns, sigmas, {
+  corr = DEFAULT_CORR,
+  phi = DEFAULT_PHI,
+  dfStudent = 5,
+} = {}) {
+  const L = cholesky4(corr);
+  const keys = ['capi', 'scpi', 'pea', 'per'];
+  const mu = keys.map(k => Math.log(1 + expectedReturns[k]));
+  const sig = keys.map(k => sigmas[k]);
+  const phiArr = keys.map(k => phi[k] || 0);
+
+  const returns = {
+    capi: new Float64Array(nYears),
+    scpi: new Float64Array(nYears),
+    pea:  new Float64Array(nYears),
+    per:  new Float64Array(nYears),
+  };
+
+  // État AR(1) : écart par rapport à la moyenne (initialisé à 0)
+  const prevDeviation = new Float64Array(4);
+
+  for (let y = 0; y < nYears; y++) {
+    // 4 innovations indépendantes Student-t
+    const eps = [studentTZ(dfStudent), studentTZ(dfStudent), studentTZ(dfStudent), studentTZ(dfStudent)];
+    // Normaliser Student-t pour variance unitaire : Var(t_df) = df/(df-2)
+    const stdFactor = Math.sqrt((dfStudent - 2) / dfStudent);
+    for (let i = 0; i < 4; i++) eps[i] *= stdFactor;
+
+    // Corrélation via Cholesky : z = L × eps
+    const z = new Float64Array(4);
+    for (let i = 0; i < 4; i++) {
+      let sum = 0;
+      for (let j = 0; j <= i; j++) sum += L[i * 4 + j] * eps[j];
+      z[i] = sum;
+    }
+
+    // AR(1) mean reversion : deviation_t = phi * deviation_{t-1} + z_t
+    for (let i = 0; i < 4; i++) {
+      prevDeviation[i] = phiArr[i] * prevDeviation[i] + z[i];
+    }
+
+    // Log-rendement avec mean reversion et volatilité ajustée
+    // sigma_eff = sigma * sqrt(1 - phi²) pour conserver la variance marginale
+    for (let i = 0; i < 4; i++) {
+      const sigEff = sig[i] * Math.sqrt(1 - phiArr[i] * phiArr[i]);
+      const logR = mu[i] - sigEff * sigEff / 2 + sigEff * prevDeviation[i];
+      returns[keys[i]][y] = Math.exp(logR) - 1;
+    }
+  }
+  return returns;
+}
+
+// Projection légère d'une simulation : renvoie {total[], revenuReel[]} par année.
+// annualReturns = { capi[y], scpi[y], pea[y], per[y] } — rendements tirés au sort.
+// ctx = valeurs déterministes pré-calculées depuis computeAll.
+function runProjectionMC(ctx, annualReturns) {
+  const {
+    ageActuel, ageObjectif, ageFin, ageRetraite, inflation,
+    contratCapi, scpiNet, scpi: scpiGross, peaPerso, per,
+    partDistribScpi, fraisEntreeScpi, forfaitTME,
+    seuilIS, tauxISReduit, tauxISNormal,
+    resultatAvantIS, resultatMissions, revenuMissionsAnnuel,
+    croquerCapital, drawdownAnnuelBrut,
+    provisionRisque, anneesDrawdown,
+    netNetMensuel,
+    retraiteBaseMois, retraiteCompMois,
+    fiscNetteRetraite, fiscNettePerEff, tauxConversionPer,
+    tauxFlatTax, psPea,
+    rendementScpiDistrib: rendementScpiDistribDet,
+    rendementNetDrag, margeSecurite,
+  } = ctx;
+
+  const PLAFOND_PEA = 150000;
+  const nYears = ageFin - ageActuel + 1;
+  const totals = new Float64Array(nYears);
+  const revenus = new Float64Array(nYears);
+  const annees = ageObjectif - ageActuel;
+
+  let cumCapi = 0, cumCapiBase = 0, cumScpi = 0, cumScpiBase = 0;
+  let cumPea = 0, cumPeaBase = 0, cumPer = 0, cumPerBase = 0;
+  let cumForfaitsIS = 0;
+  let perRenteAnnuelleBrute = 0;
+
+  for (let y = 0; y < nYears; y++) {
+    const age = ageActuel + y;
+    const phase = age < ageObjectif ? 1 : age < ageRetraite ? 2 : 3;
+    const infY = Math.pow(1 + inflation, y);
+
+    if (y === 0) {
+      totals[0] = provisionRisque;
+      revenus[0] = netNetMensuel;
+      continue;
+    }
+
+    // Rendements stochastiques pour cette année
+    const rCapi = annualReturns.capi[y];
+    const rScpi = annualReturns.scpi[y];
+    const rPea  = annualReturns.pea[y];
+    const rPer  = annualReturns.per[y];
+    const rScpiEffectif = rScpi * (1 - partDistribScpi * fraisEntreeScpi);
+    const rScpiDistrib  = rScpi * partDistribScpi;
+
+    let actualWithdrawal = 0;
+
+    if (phase === 1) {
+      cumCapi = cumCapi * (1 + rCapi) + contratCapi * infY;
+      cumCapiBase += contratCapi * infY;
+      const cumScpiAvant = cumScpi;
+      cumScpi = cumScpi * (1 + rScpiEffectif) + scpiNet * infY;
+      cumScpiBase += scpiGross * infY;
+      // Base SCPI : distributions réinvesties
+      const distribBrut = cumScpiAvant * rScpiDistrib;
+      const tauxISEst = tauxISNormal; // simplifié pour perf MC
+      cumScpiBase += Math.max(0, distribBrut * (1 - tauxISEst) * (1 - fraisEntreeScpi));
+      const peaV = Math.min(peaPerso * infY, Math.max(0, PLAFOND_PEA - cumPeaBase));
+      cumPea = cumPea * (1 + rPea) + peaV;
+      cumPeaBase += peaV;
+      cumPer = cumPer * (1 + rPer) + per * infY;
+      cumPerBase += per * infY;
+    } else if (croquerCapital) {
+      const perDebloque = age >= 64;
+      const anneesDepuisPhase = age - ageObjectif;
+      const currentDrawdown = drawdownAnnuelBrut * Math.pow(1 + inflation, anneesDepuisPhase);
+
+      const poolCapi = cumCapi * (1 + rCapi);
+      const poolScpi = cumScpi * (1 + rScpiEffectif);
+      const poolPea = cumPea * (1 + rPea);
+      const poolPer = cumPer * (1 + rPer);
+
+      const totalPool = perDebloque
+        ? poolCapi + poolScpi + poolPea + poolPer
+        : poolCapi + poolScpi + poolPea;
+      actualWithdrawal = Math.min(currentDrawdown, totalPool);
+
+      if (totalPool > 0) {
+        const rc = poolCapi / totalPool, rs = poolScpi / totalPool, rp = poolPea / totalPool;
+        const prevC = poolCapi; cumCapi = poolCapi - actualWithdrawal * rc;
+        cumCapiBase = prevC > 0 ? cumCapiBase * (cumCapi / prevC) : 0;
+        const prevS = poolScpi; cumScpi = poolScpi - actualWithdrawal * rs;
+        cumScpiBase = prevS > 0 ? cumScpiBase * (cumScpi / prevS) : 0;
+        const prevP = poolPea; cumPea = poolPea - actualWithdrawal * rp;
+        cumPeaBase = prevP > 0 ? cumPeaBase * (cumPea / prevP) : 0;
+        if (perDebloque) {
+          const rpe = poolPer / totalPool;
+          const prevPe = poolPer; cumPer = poolPer - actualWithdrawal * rpe;
+          cumPerBase = prevPe > 0 ? cumPerBase * (cumPer / prevPe) : 0;
+        } else {
+          cumPer = poolPer;
+        }
+      } else {
+        cumCapi = poolCapi; cumScpi = poolScpi; cumPea = poolPea; cumPer = poolPer;
+      }
+      cumCapi = Math.max(0, cumCapi); cumScpi = Math.max(0, cumScpi);
+      cumPea = Math.max(0, cumPea); cumPer = Math.max(0, cumPer);
+    } else {
+      // Mode rente perpétuelle
+      cumCapi = cumCapi * (1 + rCapi);
+      cumScpi = cumScpi * (1 + rScpiEffectif);
+      if (phase === 2) {
+        const peaContrib = Math.min(
+          Math.min(peaPerso / 2, revenuMissionsAnnuel) * infY,
+          Math.max(0, PLAFOND_PEA - cumPeaBase)
+        );
+        cumPea = cumPea * (1 + rPea) + peaContrib;
+        cumPeaBase += peaContrib;
+      } else {
+        cumPea = cumPea * (1 + rPea);
+      }
+      cumPer = cumPer * (1 + rPer);
+      if (age === 64 && perRenteAnnuelleBrute === 0 && cumPer > 0) {
+        perRenteAnnuelleBrute = cumPer * tauxConversionPer;
+        cumPer = 0; cumPerBase = 0;
+      }
+    }
+
+    // IS drag annuel (forfait TME + distributions SCPI)
+    const forfaitAnnuel = cumCapiBase > 0 ? cumCapiBase * forfaitTME : 0;
+    const revenuScpiAnnuel = cumScpi > 0 ? cumScpi * rScpiDistrib : 0;
+    const totalRevPlacements = forfaitAnnuel + revenuScpiAnnuel;
+    const resultatMissionsY = phase === 2 ? resultatMissions * infY : 0;
+    const resultatExploitationY = phase === 1 ? resultatAvantIS * infY : resultatMissionsY;
+    const totalResultatSociete = resultatExploitationY + totalRevPlacements;
+    const isTotalSociete = Math.min(totalResultatSociete, seuilIS) * tauxISReduit
+      + Math.max(0, totalResultatSociete - seuilIS) * tauxISNormal;
+
+    if (totalRevPlacements > 0 && totalResultatSociete > 0) {
+      const ratioPl = totalRevPlacements / totalResultatSociete;
+      const isPl = isTotalSociete * ratioPl;
+      if (forfaitAnnuel > 0) {
+        cumCapi = Math.max(0, cumCapi - isPl * (forfaitAnnuel / totalRevPlacements));
+        cumForfaitsIS += forfaitAnnuel;
+      }
+      if (revenuScpiAnnuel > 0) {
+        cumScpi = Math.max(0, cumScpi - isPl * (revenuScpiAnnuel / totalRevPlacements));
+      }
+    }
+
+    // Provision risque (amortie en mode croquer)
+    const anneesDepuisObjectif = age - ageObjectif;
+    const tresoRestante = (croquerCapital && phase >= 2)
+      ? Math.max(0, provisionRisque * (1 - anneesDepuisObjectif / anneesDrawdown))
+      : provisionRisque;
+
+    const totalHorsPer = cumCapi + cumScpi + cumPea + tresoRestante;
+    const totalAvecPer = totalHorsPer + cumPer;
+    totals[y] = totalAvecPer;
+
+    // Revenu mensuel réel (simplifié pour perf MC)
+    const deflate = inflation > 0 ? 1 / Math.pow(1 + inflation, y) : 1;
+    const sousIndexationArrco = Math.pow(1 - 0.003, y);
+
+    if (phase === 1) {
+      revenus[y] = netNetMensuel; // déjà en réel (constant)
+    } else if (croquerCapital) {
+      // Drawdown net estimé (fiscalité simplifiée — ratio gains/base approximé)
+      const totalVal = cumCapi + cumScpi + cumPea + cumPer;
+      const totalBase = cumCapiBase + cumScpiBase + cumPeaBase + cumPerBase;
+      const ratioGains = totalVal > 0 ? Math.max(0, totalVal - totalBase) / totalVal : 0;
+      const fiscEst = 1 - ratioGains * tauxFlatTax; // approximation conservatrice
+      const drawdownNet = actualWithdrawal * fiscEst;
+      const retraiteBrut = phase === 3
+        ? (retraiteBaseMois + retraiteCompMois * sousIndexationArrco) : 0;
+      const retraiteNet = retraiteBrut * (fiscNetteRetraite || 1);
+      const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax) / 12
+        : 0;
+      revenus[y] = drawdownNet * deflate / 12 + revenuMissionsNet * deflate + retraiteNet;
+    } else {
+      // Mode rente perpétuelle
+      const tauxRetrait = Math.max(0, rendementNetDrag - inflation - margeSecurite);
+      // Fiscalité simplifiée (ratio gains/base)
+      const totalVal = cumCapi + cumScpi + cumPea;
+      const totalBase = cumCapiBase + cumScpiBase + cumPeaBase;
+      const ratioGains = totalVal > 0 ? Math.max(0, totalVal - totalBase) / totalVal : 0;
+      const fiscEst = 1 - ratioGains * tauxFlatTax;
+      const revenuPassif = totalHorsPer * tauxRetrait * fiscEst / 12;
+      const perRente = (!croquerCapital && perRenteAnnuelleBrute > 0)
+        ? perRenteAnnuelleBrute * (fiscNettePerEff || 1) / 12 : 0;
+      const retraiteBrut = phase === 3
+        ? (retraiteBaseMois + retraiteCompMois * sousIndexationArrco) : 0;
+      const retraiteNet = retraiteBrut * (fiscNetteRetraite || 1);
+      const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax) / 12
+        : 0;
+      revenus[y] = revenuPassif * deflate + perRente * deflate + retraiteNet + revenuMissionsNet * deflate;
+    }
+  }
+  return { totals, revenus };
+}
+
+// Orchestrateur Monte Carlo : lance N simulations et renvoie les percentiles.
+// Prend les mêmes params que computeAll + volatilités.
+export function computeMonteCarloProjection(params, det, {
+  volCapi = 0.15,
+  volScpi = 0.05,
+  volPea  = 0.18,
+  volPer  = 0.10,
+  nSimulations = 500,
+} = {}) {
+  const {
+    rendementCapi: rendementCapi_ = params.rendement,
+    rendementScpi: rendementScpi_ = params.rendement,
+    rendementPea:  rendementPea_  = params.rendement,
+    rendementPer:  rendementPer_  = params.rendement,
+  } = params;
+  const rendementCapi = rendementCapi_;
+  const rendementScpi = rendementScpi_;
+  const rendementPea  = rendementPea_;
+  const rendementPer  = rendementPer_;
+  const partDistribScpi = params.partDistribScpi || DEFAULTS.partDistribScpi;
+  const fraisEntreeScpi = params.fraisEntreeScpi || DEFAULTS.fraisEntreeScpi;
+
+  const nYears = (params.ageFin || DEFAULTS.ageFin) - (params.ageActuel || DEFAULTS.ageActuel) + 1;
+
+  // Contexte déterministe (calculé une seule fois)
+  const ctx = {
+    ageActuel: params.ageActuel || DEFAULTS.ageActuel,
+    ageObjectif: params.ageObjectif || DEFAULTS.ageObjectif,
+    ageFin: params.ageFin || DEFAULTS.ageFin,
+    ageRetraite: 67,
+    inflation: det.inflation,
+    contratCapi: det.contratCapi,
+    scpiNet: det.scpi * (1 - fraisEntreeScpi),
+    scpi: det.scpi,
+    peaPerso: det.peaPerso,
+    per: det.per,
+    partDistribScpi,
+    fraisEntreeScpi,
+    forfaitTME: 1.05 * (params.tme || DEFAULTS.tme),
+    seuilIS: params.seuilIS || DEFAULTS.seuilIS,
+    tauxISReduit: params.tauxISReduit || DEFAULTS.tauxISReduit,
+    tauxISNormal: params.tauxISNormal || DEFAULTS.tauxISNormal,
+    resultatAvantIS: det.resultatAvantIS,
+    resultatMissions: Math.max(0, (params.tjm || DEFAULTS.tjm) * (params.joursLeverLePied || DEFAULTS.joursLeverLePied) - ((params.frais?.comptable || 0) + (params.frais?.rcPro || 0) + (params.frais?.cfe || 0) + (params.frais?.banque || 0) + (params.frais?.mutuelle || 0) + (params.frais?.prevoyance || 0))),
+    revenuMissionsAnnuel: det.revenuMissionsAnnuel,
+    croquerCapital: params.croquerCapital || false,
+    drawdownAnnuelBrut: det.drawdownAnnuelBrut,
+    provisionRisque: det.provisionRisque,
+    anneesDrawdown: (params.ageFin || DEFAULTS.ageFin) - (params.ageObjectif || DEFAULTS.ageObjectif),
+    netNetMensuel: det.netNetMensuel,
+    retraiteBaseMois: det.retraiteBaseMois,
+    retraiteCompMois: det.retraiteCompMois,
+    fiscNetteRetraite: det.fiscNettePerEff, // même formule (pension)
+    fiscNettePerEff: det.fiscNettePerEff,
+    tauxConversionPer: params.tauxConversionPer || DEFAULTS.tauxConversionPer,
+    tauxFlatTax: params.tauxFlatTax || DEFAULTS.tauxFlatTax,
+    psPea: params.psPea || DEFAULTS.psPea,
+    rendementScpiDistrib: rendementScpi * partDistribScpi,
+    rendementNetDrag: 0, // calculé ci-dessous
+    margeSecurite: params.margeSecurite || DEFAULTS.margeSecurite,
+  };
+
+  // Calcul du rendementNetDrag depuis le résultat déterministe
+  // (réutilise la logique de computeAll pour la pondération)
+  const projHP = det.projection.find(p => p.age === ctx.ageObjectif);
+  if (projHP) {
+    const vC = projHP.capi || 0, vS = projHP.scpiVal || 0, vP = projHP.pea || 0;
+    const tot = vC + vS + vP;
+    if (tot > 0) {
+      const wC = vC / tot, wS = vS / tot, wP = vP / tot;
+      const rScpiEff = rendementScpi * (1 - partDistribScpi * fraisEntreeScpi);
+      const rendPond = wC * rendementCapi + wS * rScpiEff + wP * rendementPea;
+      const dragCapi = ctx.forfaitTME * ctx.tauxISNormal * 0.5; // ratio base/valeur approx
+      const dragScpi = rendementScpi * partDistribScpi * ctx.tauxISNormal;
+      const dragMoyen = wC * dragCapi + wS * dragScpi;
+      ctx.rendementNetDrag = Math.max(0, rendPond - dragMoyen);
+    }
+  }
+
+  // Collecter les résultats : [year][simulation]
+  const allTotals = new Array(nYears).fill(null).map(() => new Float64Array(nSimulations));
+  const allRevenus = new Array(nYears).fill(null).map(() => new Float64Array(nSimulations));
+
+  const expectedReturns = { capi: rendementCapi, scpi: rendementScpi, pea: rendementPea, per: rendementPer };
+  const sigmas = { capi: volCapi, scpi: volScpi, pea: volPea, per: volPer };
+
+  for (let sim = 0; sim < nSimulations; sim++) {
+    // Rendements corrélés, fat-tailed (Student-t df=5), mean-reverting (AR(1))
+    const returns = generateCorrelatedReturns(nYears, expectedReturns, sigmas);
+
+    const { totals, revenus } = runProjectionMC(ctx, returns);
+    for (let y = 0; y < nYears; y++) {
+      allTotals[y][sim] = totals[y];
+      allRevenus[y][sim] = revenus[y];
+    }
+  }
+
+  // Calculer les percentiles
+  const percentiles = [10, 25, 50, 75, 90];
+  const projection = [];
+  for (let y = 0; y < nYears; y++) {
+    const sortedT = Array.from(allTotals[y]).sort((a, b) => a - b);
+    const sortedR = Array.from(allRevenus[y]).sort((a, b) => a - b);
+    const entry = { age: ctx.ageActuel + y, annee: 2026 + y };
+    for (const p of percentiles) {
+      const idx = Math.min(Math.floor(p / 100 * nSimulations), nSimulations - 1);
+      entry[`totalP${p}`] = Math.round(sortedT[idx]);
+      entry[`revenuP${p}`] = Math.round(sortedR[idx]);
+    }
+    projection.push(entry);
+  }
+
+  // Taux de survie du capital (mode croquer : % de runs avec capital > 0 à ageFin)
+  const lastIdx = nYears - 1;
+  const survived = Array.from(allTotals[lastIdx]).filter(v => v > 0).length;
+
+  return {
+    projection,
+    survivalRate: survived / nSimulations,
+    nSimulations,
+  };
+}
+
+// ============================================================
 // FORMATAGE TEXTE — Source unique pour CLI et bouton "Copy to LLM"
 // ============================================================
 

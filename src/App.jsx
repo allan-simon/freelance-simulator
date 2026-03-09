@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
-import { computeAll, computeChargesPatronales, computeConstraints, DEFAULTS, formatReport } from "./model.js";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, ComposedChart } from "recharts";
+import { computeAll, computeChargesPatronales, computeConstraints, computeMonteCarloProjection, DEFAULTS, formatReport } from "./model.js";
 
 // ============================================================
 // COMPOSANTS UI
@@ -315,6 +315,9 @@ export default function App() {
   };
 
   const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso]);
+
+  // Monte Carlo — 500 simulations avec rendements stochastiques
+  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -685,6 +688,112 @@ export default function App() {
               <Line yAxisId="revenu" type="stepAfter" dataKey="retraiteMois" stroke="#d69e2e" strokeWidth={1.5} name="Retraite obligatoire /mois" dot={false} strokeDasharray="3 3" />
             </LineChart>
           </ResponsiveContainer>
+        </Card>
+
+        {/* MONTE CARLO */}
+        <Card title="Simulation Monte Carlo — bandes de confiance"
+          subtitle={`${mc.nSimulations} simulations — corrélations entre actifs, crises (Student-t), retour à la moyenne${croquerCapital ? ` — probabilité de survie du capital à ${ageFin} ans : ${fmtPct(mc.survivalRate)}` : ''}`}
+          accent="#6b46c1">
+          {(() => {
+            const mcData = mc.projection.map((row, i) => {
+              const det = r.projection[i];
+              return {
+                age: row.age,
+                // Bandes patrimoine (stacked areas)
+                baseT10: row.totalP10,
+                bandT10_25: Math.max(0, row.totalP25 - row.totalP10),
+                bandT25_50: Math.max(0, row.totalP50 - row.totalP25),
+                bandT50_75: Math.max(0, row.totalP75 - row.totalP50),
+                bandT75_90: Math.max(0, row.totalP90 - row.totalP75),
+                deterministic: det ? det.total : 0,
+                mediane: row.totalP50,
+                // Bandes revenu
+                baseR10: row.revenuP10,
+                bandR10_25: Math.max(0, row.revenuP25 - row.revenuP10),
+                bandR25_50: Math.max(0, row.revenuP50 - row.revenuP25),
+                bandR50_75: Math.max(0, row.revenuP75 - row.revenuP50),
+                bandR75_90: Math.max(0, row.revenuP90 - row.revenuP75),
+                deterministicR: det ? det.revenuTotalMoisReel : 0,
+                medianeR: row.revenuP50,
+              };
+            });
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {/* Patrimoine */}
+                <div>
+                  <div style={{ fontSize: 12, color: '#718096', marginBottom: 8 }}>Patrimoine total — P10 à P90</div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={mcData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#edf2f7" />
+                      <XAxis dataKey="age" tick={{ fontSize: 11 }} interval={2} />
+                      <YAxis tickFormatter={v => fmtK(v)} tick={{ fontSize: 11 }} />
+                      <Tooltip content={({ active, label }) => {
+                        if (!active) return null;
+                        const row = mc.projection.find(r => r.age === label);
+                        const det = r.projection.find(p => p.age === label);
+                        if (!row) return null;
+                        return (
+                          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{label} ans</div>
+                            <div style={{ color: '#e53e3e' }}>Pessimiste (P10) : {fmtK(row.totalP10)}</div>
+                            <div style={{ color: '#6b46c1', fontWeight: 600 }}>Médiane (P50) : {fmtK(row.totalP50)}</div>
+                            <div style={{ color: '#38a169' }}>Optimiste (P90) : {fmtK(row.totalP90)}</div>
+                            {det && <div style={{ color: '#718096', borderTop: '1px solid #e2e8f0', marginTop: 4, paddingTop: 4 }}>Déterministe : {fmtK(det.total)}</div>}
+                          </div>
+                        );
+                      }} />
+                      <Area stackId="1" type="monotone" dataKey="baseT10" fill="transparent" stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandT10_25" fill="#6b46c1" fillOpacity={0.08} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandT25_50" fill="#6b46c1" fillOpacity={0.18} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandT50_75" fill="#6b46c1" fillOpacity={0.18} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandT75_90" fill="#6b46c1" fillOpacity={0.08} stroke="none" />
+                      <Line type="monotone" dataKey="deterministic" stroke="#1a365d" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Déterministe" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Revenu mensuel réel — à partir de ageObjectif (avant = déterministe, pas de variance) */}
+                <div>
+                  <div style={{ fontSize: 12, color: '#718096', marginBottom: 8 }}>Revenu mensuel réel (€ {new Date().getFullYear()}) — P10 à P90 (à partir de {ageObjectif} ans : avant, le revenu vient du salaire + dividendes, pas des marchés)</div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={mcData.filter(d => d.age >= ageObjectif - 1)} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#edf2f7" />
+                      <XAxis dataKey="age" tick={{ fontSize: 11 }} interval={2} />
+                      <YAxis tickFormatter={v => fmt(v)} tick={{ fontSize: 11 }} />
+                      <Tooltip content={({ active, label }) => {
+                        if (!active) return null;
+                        const row = mc.projection.find(r => r.age === label);
+                        const det = r.projection.find(p => p.age === label);
+                        if (!row) return null;
+                        return (
+                          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{label} ans</div>
+                            <div style={{ color: '#e53e3e' }}>Pessimiste (P10) : {fmt(row.revenuP10)}/mois</div>
+                            <div style={{ color: '#6b46c1', fontWeight: 600 }}>Médiane (P50) : {fmt(row.revenuP50)}/mois</div>
+                            <div style={{ color: '#38a169' }}>Optimiste (P90) : {fmt(row.revenuP90)}/mois</div>
+                            {det && <div style={{ color: '#718096', borderTop: '1px solid #e2e8f0', marginTop: 4, paddingTop: 4 }}>Déterministe : {fmt(det.revenuTotalMoisReel)}/mois</div>}
+                          </div>
+                        );
+                      }} />
+                      <Area stackId="1" type="monotone" dataKey="baseR10" fill="transparent" stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandR10_25" fill="#38a169" fillOpacity={0.08} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandR25_50" fill="#38a169" fillOpacity={0.18} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandR50_75" fill="#38a169" fillOpacity={0.18} stroke="none" />
+                      <Area stackId="1" type="monotone" dataKey="bandR75_90" fill="#38a169" fillOpacity={0.08} stroke="none" />
+                      <Line type="monotone" dataKey="deterministicR" stroke="#1a365d" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Déterministe" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })()}
+          <div style={{ marginTop: 12, fontSize: 11, color: '#a0aec0', lineHeight: 1.6 }}>
+            Volatilités : capi 15%, SCPI 5%, PEA 18%, PER 10%.
+            Corrélations : capi↔PEA 0.85, capi↔SCPI 0.20, capi↔PER 0.60 (en crise, les actions chutent ensemble).
+            Queues épaisses (Student-t df=5) : reproduit les crashs -30/40%.
+            Retour à la moyenne (AR(1) φ=-0.15) : réduit la dispersion long terme.
+            {croquerCapital ? ' Le drawdown est fixé au niveau déterministe — les bandes montrent si le capital survit.' : ''}
+          </div>
         </Card>
 
         {/* TIMELINE DÉTAILLÉE */}
