@@ -533,6 +533,12 @@ export function computeAll(params) {
   const resteSASU = benefDistribuable - divBrutsSortis;
   const ratioScpi = Math.max(0, 1 - ratioTreso - ratioCapi);
   const reserveTreso = resteSASU * ratioTreso;
+  // ⚠ Hypothèse simplificatrice : la part trésorerie du resteSASU n'est PAS accumulée
+  // dans la projection. Elle sert à construire progressivement la provision pour risque
+  // (6 mois de net net ≈ 60k€). En pratique, les aléas du freelance (impayés, creux
+  // d'activité, imprévus) consomment ce cash au fil de l'eau — il ne s'empile pas.
+  // Cette simplification est valide tant que resteSASU annuel << provisionRisque cible
+  // (ici ~4k/an vs 60k cible → ~15 ans pour atteindre le seuil, dilué par les aléas).
   const contratCapi = resteSASU * ratioCapi;
   const scpi = resteSASU * ratioScpi;
   const scpiNet = scpi * (1 - fraisEntreeScpi); // montant effectivement investi après frais de souscription
