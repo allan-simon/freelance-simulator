@@ -61,6 +61,9 @@ const ratioCapi = pick('ratioCapi');
 const inflation = pick('inflation');
 const anneesAre = pick('anneesAre');
 const salaireBrutCDI = pick('salaireBrutCDI');
+const peaPerso = pick('peaPerso');
+const ageActuel = pick('ageActuel');
+const partsFiscales = pick('partsFiscales');
 
 function buildParams() {
   const c = computeConstraints({ tjm, jours, frais, salaireBrut, per });
@@ -71,9 +74,9 @@ function buildParams() {
       tjm, jours, salaireBrut: c.salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
       seuilIS: DEFAULTS.seuilIS, tauxISReduit: DEFAULTS.tauxISReduit, tauxISNormal: DEFAULTS.tauxISNormal,
       tauxFlatTax: DEFAULTS.tauxFlatTax, abattementIR: DEFAULTS.abattementIR,
-      revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales: DEFAULTS.partsFiscales,
+      revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales,
       frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer,
-      ageActuel: DEFAULTS.ageActuel, ageObjectif,
+      ageActuel, ageObjectif, peaPerso,
       croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi, inflation,
       anneesAre, salaireBrutCDI
     },
