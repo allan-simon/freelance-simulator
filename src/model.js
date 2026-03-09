@@ -689,17 +689,66 @@ export function computeAll(params) {
   const rendementPondereHorsPer = wCapi * rendementCapi + wScpi * rendementScpiEffectif + wPea * rendementPea;
   const rendementNetDrag = Math.max(0, rendementPondereHorsPer - dragFiscalMoyen);
 
-  // Annuité en taux réel net de drag fiscal → versements constants en pouvoir d'achat
-  // Marge 0,5 point (même prudence que le mode rente perpétuelle) : le mode croquer capital
-  // est plus risqué (capital à zéro si les rendements déçoivent) → au moins aussi prudent
-  //
-  // ⚠ Limitation assumée : le drawdown est calculé par formule d'annuité avec un taux blend fixe,
-  // alors que la simulation réelle applique des rendements distincts par enveloppe (6% capi, 4.5% SCPI,
-  // 7% PEA) avec des drags fiscaux différents. Le drawdown n'est jamais recalculé en cours de route,
-  // donc le capital ne finit pas exactement à zéro à ageFin (dérive cumulative sur 30+ ans).
-  // Pour corriger il faudrait une boucle itérative (bisection/Newton-Raphson) cherchant le drawdown
-  // qui épuise exactement le capital dans la simulation année par année — refacto significative.
+  // Annuité en taux réel net de drag fiscal → estimation initiale pour la bisection
+  // Marge 0,5 point : le mode croquer capital est risqué (capital à zéro si rendements déçoivent)
   const tauxReel = Math.max(0.001, rendementNetDrag - inflation - margeSecurite);
+
+  // Simulation légère du capital pendant le drawdown (phases 2-3, croquerCapital uniquement).
+  // Réplique la logique de la boucle principale : croissance par enveloppe, retrait pro-rata,
+  // IS drag (forfait TME + distributions SCPI), PER débloqué à 64.
+  // Retourne le capital total restant à ageFin.
+  const simulateDrawdownFinal = (drawdownBase) => {
+    let c = projHorsPer.capiValue, cb = projHorsPer.capiBase;
+    let s = projHorsPer.scpiValue, sb = projHorsPer.scpiBase;
+    let p = projHorsPer.peaValue, pb = projHorsPer.peaBase;
+    let pe = poolPerAvantRetrait, peb = projAtObjectif.perBase;
+    for (let dy = 0; dy < anneesDrawdown; dy++) {
+      const age = ageObjectif + dy;
+      const perDebloque = age >= 64;
+      const phase = age < ageRetraite ? 2 : 3;
+      const infY = Math.pow(1 + inflation, dy + 1);  // +1 car dy=0 est la 1ère année après ageObjectif
+      // Drawdown indexé inflation → pouvoir d'achat constant
+      const currentDrawdown = drawdownBase * Math.pow(1 + inflation, dy);
+      // Croissance par enveloppe
+      const poolCapi = c * (1 + rendementCapi);
+      const poolScpi = s * (1 + rendementScpiEffectif);
+      const poolPea = p * (1 + rendementPea);
+      const poolPer = pe * (1 + rendementPer);
+      const totalPool = perDebloque
+        ? poolCapi + poolScpi + poolPea + poolPer
+        : poolCapi + poolScpi + poolPea;
+      const withdrawal = Math.min(currentDrawdown, totalPool);
+      if (totalPool > 0) {
+        const rc = poolCapi / totalPool, rs = poolScpi / totalPool, rp = poolPea / totalPool;
+        const prevC = poolCapi; c = poolCapi - withdrawal * rc;
+        cb = prevC > 0 ? cb * (c / prevC) : 0;
+        const prevS = poolScpi; s = poolScpi - withdrawal * rs;
+        sb = prevS > 0 ? sb * (s / prevS) : 0;
+        const prevP = poolPea; p = poolPea - withdrawal * rp;
+        pb = prevP > 0 ? pb * (p / prevP) : 0;
+        if (perDebloque) {
+          const rpe = poolPer / totalPool;
+          const prevPe = poolPer; pe = poolPer - withdrawal * rpe;
+          peb = prevPe > 0 ? peb * (pe / prevPe) : 0;
+        } else { pe = poolPer; }
+      } else { c = poolCapi; s = poolScpi; p = poolPea; pe = poolPer; }
+      c = Math.max(0, c); s = Math.max(0, s); p = Math.max(0, p); pe = Math.max(0, pe);
+      // IS drag annuel (même logique que la boucle principale)
+      const forfait = cb > 0 ? cb * forfaitTME : 0;
+      const revScpi = s > 0 ? s * rendementScpiDistrib : 0;
+      const totalRevPl = forfait + revScpi;
+      const resMissY = phase === 2 ? resultatMissions * infY : 0;
+      const totalRes = resMissY + totalRevPl;
+      const isTotal = Math.min(totalRes, seuilIS) * tauxISReduit + Math.max(0, totalRes - seuilIS) * tauxISNormal;
+      if (totalRevPl > 0 && totalRes > 0) {
+        const ratioPl = totalRevPl / totalRes;
+        const isPl = isTotal * ratioPl;
+        if (forfait > 0) c = Math.max(0, c - isPl * (forfait / totalRevPl));
+        if (revScpi > 0) s = Math.max(0, s - isPl * (revScpi / totalRevPl));
+      }
+    }
+    return c + s + p + pe;
+  };
 
   // Sortie PER à 64 ans (art. L224-1 Code monétaire et financier, loi PACTE) :
   // - croquer = true  → sortie en capital fractionné : le PER rejoint le pool de drawdown
@@ -708,32 +757,35 @@ export function computeAll(params) {
   //   (CGI art. 154 bis, 163 quatervicies, 200 A)
   // - croquer = false → sortie en rente viagère : capital converti par l'assureur (tauxConversionPer)
   if (croquerCapital && rendementPondereHorsPer > 0) {
+    // Estimation initiale par formule d'annuité (taux blend), puis bisection pour trouver
+    // le drawdown qui épuise exactement le capital dans la simulation par enveloppe.
+    let drawdownEstime;
     if (ageObjectif >= 64) {
-      // Tout est débloqué dès le départ
-      drawdownAnnuelBrutApres64 = anneesDrawdown > 0
+      drawdownEstime = anneesDrawdown > 0
         ? poolTotalAvantRetrait * tauxReel / (1 - Math.pow(1 + tauxReel, -anneesDrawdown))
         : 0;
     } else {
-      // Annuité lissée : un seul drawdown constant (en pouvoir d'achat) de ageObjectif à ageFin.
-      // Le PER est bloqué avant 64 → il rejoint le pool comme injection ponctuelle à 64.
-      // On résout A tel que :
-      //   1. Le pool hors PER (P1) est drainé à A pendant n1 ans au taux réel r
-      //   2. À l'année n1, le PER (perAt64) rejoint le solde restant
-      //   3. Le pool combiné est drainé à A pendant n2 ans, atteignant 0
-      // Solution : A = (P1 × (1+r)^n1 + perAt64) / (ann1 + pv2)
-      //   où ann1 = ((1+r)^n1 − 1) / r, pv2 = (1 − (1+r)^(−n2)) / r
       let perAt64 = poolPerAvantRetrait;
       for (let i = 0; i < anneesAvant64; i++) perAt64 = perAt64 * (1 + rendementPer);
-
       const fv1 = Math.pow(1 + tauxReel, anneesAvant64);
       const ann1 = anneesAvant64 > 0 ? (fv1 - 1) / tauxReel : 0;
       const pv2 = anneesApres64 > 0 ? (1 - Math.pow(1 + tauxReel, -anneesApres64)) / tauxReel : 0;
-      const drawdownLisse = (ann1 + pv2) > 0
+      drawdownEstime = (ann1 + pv2) > 0
         ? (poolHorsPerAvantRetrait * fv1 + perAt64) / (ann1 + pv2)
         : 0;
-      drawdownAnnuelBrutAvant64 = drawdownLisse;
-      drawdownAnnuelBrutApres64 = drawdownLisse;
     }
+    // Bisection : trouver le drawdown qui donne capital final ≈ 0
+    // Bornes : 0 (pas de retrait) → 2× l'estimation (largement suffisant)
+    let lo = 0, hi = drawdownEstime * 2;
+    for (let iter = 0; iter < 50; iter++) {
+      const mid = (lo + hi) / 2;
+      const finalCap = simulateDrawdownFinal(mid);
+      if (finalCap > 0) lo = mid; else hi = mid;
+      if (Math.abs(hi - lo) < 1) break; // convergence à 1€ près
+    }
+    const drawdownBisection = (lo + hi) / 2;
+    drawdownAnnuelBrutAvant64 = drawdownBisection;
+    drawdownAnnuelBrutApres64 = drawdownBisection;
   }
   // Pour la compatibilité : drawdownAnnuelBrut est celui de la première phase
   const drawdownAnnuelBrut = ageObjectif >= 64 ? drawdownAnnuelBrutApres64 : drawdownAnnuelBrutAvant64;
