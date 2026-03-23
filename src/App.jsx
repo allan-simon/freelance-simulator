@@ -391,6 +391,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#f7fafc', fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet" />
+      <style>{`input.no-spin::-webkit-outer-spin-button,input.no-spin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input.no-spin{-moz-appearance:textfield}`}</style>
 
       <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '24px 0 20px', marginBottom: 24 }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -475,11 +476,16 @@ export default function App() {
                   <span style={{ color: '#4a5568', whiteSpace: 'nowrap', minWidth: 70 }} title={tooltips[k] || ''}>
                     {labels[k] || k}{tooltips[k] ? ' ⓘ' : ''}
                   </span>
-                  <input type="number" min={0} max={20000} step={100} value={v}
-                    onChange={e => updateFrais(k, Math.max(0, parseInt(e.target.value) || 0))}
-                    style={{ width: '100%', padding: '3px 6px', fontSize: 11, fontWeight: 600,
-                      fontFamily: "'JetBrains Mono', monospace", color: '#1a365d',
-                      border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff', textAlign: 'right' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', width: '100%', position: 'relative' }}>
+                    <input type="number" min={0} max={20000} step={100} value={v}
+                      onChange={e => updateFrais(k, Math.max(0, parseInt(e.target.value) || 0))}
+                      className="no-spin"
+                      style={{ width: '100%', padding: '3px 20px 3px 6px', fontSize: 11, fontWeight: 600,
+                        fontFamily: "'JetBrains Mono', monospace", color: '#1a365d',
+                        border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff', textAlign: 'right',
+                        MozAppearance: 'textfield' }} />
+                    <span style={{ position: 'absolute', right: 6, fontSize: 10, color: '#a0aec0', pointerEvents: 'none' }}>€</span>
+                  </div>
                 </div>
               );
             })}
