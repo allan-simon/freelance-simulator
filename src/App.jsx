@@ -192,7 +192,7 @@ function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
 
 function Card({ title, subtitle, children, accent = "#2563eb" }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', marginBottom: 16,
+    <div style={{ background: '#fff', borderRadius: 12, padding: '14px 12px', marginBottom: 12,
       borderLeft: `4px solid ${accent}`, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
       <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 700, color: '#1a365d',
         textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>{title}</h3>
@@ -451,7 +451,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 40px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 12px 40px' }}>
         {/* ÉTAPE 1 : CHIFFRE D'AFFAIRES */}
         <Card title="1. Chiffre d'affaires" subtitle="Votre facturation = le point de départ" accent="#2563eb">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'end' }}>
