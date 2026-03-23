@@ -454,7 +454,7 @@ export default function App() {
         </Card>
 
         {/* ÉTAPE 2 : CHARGES FIXES */}
-        <div style={{ height: 8 }} />
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="2. Charges fixes d'exploitation" subtitle="Ce que la société paie quoi qu'il arrive — non lié à votre rémunération" accent="#e53e3e">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 12 }}>
             {Object.entries(frais).filter(([k]) => k !== 'per').map(([k, v]) => {
@@ -495,7 +495,7 @@ export default function App() {
         </Card>
 
         {/* ÉTAPE 3 : RÉPARTITION */}
-        <div style={{ height: 8 }} />
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="3. Répartition de la rémunération" subtitle="Comment vous répartissez entre salaire, dividendes et ce qui reste dans la société" accent="#38a169">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {/* Colonne salaire */}
@@ -671,7 +671,7 @@ export default function App() {
         </div>
 
         {/* ÉTAPE 4 : PROJECTION */}
-        <div style={{ height: 8 }} />
+        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             <Slider label="Rendement contrat capi" value={rendementCapi} onChange={setRendementCapi} min={0.02} max={0.10} step={0.005} format="pct" note="Net de frais assureur — FID actions" />
