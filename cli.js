@@ -64,9 +64,11 @@ const salaireBrutCDI = pick('salaireBrutCDI');
 const peaPerso = pick('peaPerso');
 const ageActuel = pick('ageActuel');
 const partsFiscales = pick('partsFiscales');
+const forme = args.forme || DEFAULTS.forme;
+const capitalSocial = pick('capitalSocial');
 
 function buildParams() {
-  const c = computeConstraints({ tjm, jours, frais, salaireBrut, per });
+  const c = computeConstraints({ tjm, jours, frais, salaireBrut, per, forme, capitalSocial });
   const fraisAvecPer = { ...frais, per: c.perEffectif };
   const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, c.maxDivNets));
   return {
@@ -78,7 +80,7 @@ function buildParams() {
       frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer,
       ageActuel, ageObjectif, peaPerso,
       croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi, inflation,
-      anneesAre, salaireBrutCDI
+      anneesAre, salaireBrutCDI, forme, capitalSocial
     },
     constraints: c,
     perEffectif: c.perEffectif,

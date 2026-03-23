@@ -66,7 +66,9 @@ export const DEFAULTS = {
   partsFiscales: 2.5,
   ageActuel: 36,
   inflation: 0.02,
-  anneesAre: 0, // années de maintien ARE avant rémunération SASU (0 = pas de phase ARE)
+  anneesAre: 0, // années de maintien ARE avant rémunération (0 = pas de phase ARE)
+  forme: 'sasu', // 'sasu' ou 'eurl'
+  capitalSocial: 1000, // capital social EURL (seuil 10% pour dividendes TNS)
 };
 
 // Cotisations patronales détaillées — président SASU (assimilé salarié cadre)
@@ -153,6 +155,86 @@ export function computeCotisationsSalariales(salaireBrut) {
        + salaireBrut * ASSIETTE_CSG * TAUX_CSG_CRDS;
 }
 
+// ============================================================
+// Cotisations TNS — Gérant majoritaire EURL à l'IS (réforme 2026)
+// Assiette unique = rémunération × 0.74 (abattement 26%)
+// Sources : URSSAF taux-cotisations-ac-plnr.html, décret 2024-688
+// ============================================================
+const TNS_ABATTEMENT = 0.26;
+
+// Maladie-maternité : taux moyen progressif appliqué à TOUTE l'assiette
+// (pas un taux marginal — le taux au niveau de revenu s'applique à l'ensemble)
+// Dernier palier (> 300% PASS) : taux marginal 6,5% sur l'excédent uniquement
+function computeMaladieTNS(assiette) {
+  const tranches = [
+    { min: 0,    max: 0.20, tauxMin: 0,     tauxMax: 0 },
+    { min: 0.20, max: 0.40, tauxMin: 0,     tauxMax: 0.015 },
+    { min: 0.40, max: 0.60, tauxMin: 0.015, tauxMax: 0.04 },
+    { min: 0.60, max: 1.10, tauxMin: 0.04,  tauxMax: 0.065 },
+    { min: 1.10, max: 2.00, tauxMin: 0.065, tauxMax: 0.077 },
+    { min: 2.00, max: 3.00, tauxMin: 0.077, tauxMax: 0.085 },
+  ];
+  for (const { min, max, tauxMin, tauxMax } of tranches) {
+    const seuilMin = min * PASS, seuilMax = max * PASS;
+    if (assiette <= seuilMax) {
+      if (assiette <= seuilMin) return 0;
+      const ratio = (assiette - seuilMin) / (seuilMax - seuilMin);
+      return assiette * (tauxMin + (tauxMax - tauxMin) * ratio);
+    }
+  }
+  // > 300% PASS : taux moyen à 300% PASS (8,5%) + marginal 6,5% sur l'excédent
+  const seuil300 = 3 * PASS;
+  return seuil300 * 0.085 + (assiette - seuil300) * 0.065;
+}
+
+// Allocations familiales : taux moyen progressif
+function computeAFTNS(assiette) {
+  const seuil110 = 1.10 * PASS, seuil140 = 1.40 * PASS;
+  if (assiette <= seuil110) return 0;
+  if (assiette >= seuil140) return assiette * 0.031;
+  const ratio = (assiette - seuil110) / (seuil140 - seuil110);
+  return assiette * 0.031 * ratio;
+}
+
+export function computeCotisationsTNS(remuneration) {
+  if (remuneration <= 0) return { total: 0, assiette: 0, maladie: 0, maladieIJ: 0, retraiteBase: 0, retraiteCompl: 0, invaliditeDeces: 0, af: 0, csgCrds: 0, cfp: 0, csgDeductible: 0, csgNonDeductible: 0, crds: 0, net: 0, tauxEffectif: 0 };
+  const assiette = remuneration * (1 - TNS_ABATTEMENT);
+  const t1 = Math.min(assiette, PASS);
+  const t2above = Math.max(0, assiette - PASS);
+  const t2_4pass = Math.min(t2above, 3 * PASS); // entre 1 et 4 PASS
+
+  const maladie = computeMaladieTNS(assiette);
+  const maladieIJ = Math.min(assiette, 5 * PASS) * 0.005;
+  const retraiteBase = t1 * 0.1787 + t2above * 0.0072;
+  const retraiteCompl = t1 * 0.081 + t2_4pass * 0.091;
+  const invaliditeDeces = t1 * 0.013;
+  const af = computeAFTNS(assiette);
+  const csgCrds = assiette * 0.097;
+  const cfp = PASS * 0.0025; // forfaitaire sur 1 PASS
+
+  const total = maladie + maladieIJ + retraiteBase + retraiteCompl + invaliditeDeces + af + csgCrds + cfp;
+
+  // Pour l'IR : CSG déductible 6,8%, non déductible 2,4%, CRDS 0,5%
+  const csgDeductible = assiette * 0.068;
+  const csgNonDeductible = assiette * 0.024;
+  const crds = assiette * 0.005;
+
+  return {
+    total, assiette, maladie, maladieIJ, retraiteBase, retraiteCompl,
+    invaliditeDeces, af, csgCrds, cfp,
+    csgDeductible, csgNonDeductible, crds,
+    net: remuneration - total,
+    tauxEffectif: total / remuneration,
+  };
+}
+
+// Net imposable TNS (pour l'IR) : rémunération − cotisations déductibles
+// Toutes les cotisations sont déductibles SAUF CSG non déductible (2,4%) et CRDS (0,5%)
+export function computeNetImposableTNS(remuneration, tns) {
+  const cotisationsDeductibles = tns.total - tns.csgNonDeductible - tns.crds;
+  return remuneration - cotisationsDeductibles;
+}
+
 // Barème IR 2025 — retourne { irParPart, tmi } pour un quotient familial donné
 const TRANCHES_IR = [
   { seuil: 0, taux: 0 },
@@ -225,36 +307,52 @@ export function computeConstraints({
   tjm, jours, frais, salaireBrut, per,
   seuilIS = DEFAULTS.seuilIS, tauxISReduit = DEFAULTS.tauxISReduit,
   tauxISNormal = DEFAULTS.tauxISNormal, tauxFlatTax = DEFAULTS.tauxFlatTax,
+  forme = DEFAULTS.forme, capitalSocial = DEFAULTS.capitalSocial,
 }) {
+  const isEurl = forme === 'eurl';
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
-  // Pour le max salaire, on cherche le brut tel que brut + charges(brut) ≤ disponible
-  // Approximation itérative : on part d'une estimation haute et on converge
   const disponible = caHT - totalFraisHorsPer;
-  let maxBrut = disponible; // borne haute
-  for (let i = 0; i < 10; i++) {
-    maxBrut = disponible - computeChargesPatronales(maxBrut);
+
+  let maxSalaireBrut, salaireBrutEffectif, superbrut;
+  if (isEurl) {
+    // EURL : pas de patronales en sus, la rémunération EST le coût
+    maxSalaireBrut = Math.floor(Math.max(0, disponible) / 5000) * 5000;
+    salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
+    superbrut = salaireBrutEffectif;
+  } else {
+    // SASU : brut + charges patronales
+    let maxBrut = disponible;
+    for (let i = 0; i < 10; i++) {
+      maxBrut = disponible - computeChargesPatronales(maxBrut);
+    }
+    maxSalaireBrut = Math.floor(Math.max(0, maxBrut) / 5000) * 5000;
+    salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
+    superbrut = salaireBrutEffectif + computeChargesPatronales(salaireBrutEffectif);
   }
-  const maxSalaireBrut = Math.floor(Math.max(0, maxBrut) / 5000) * 5000;
-  const salaireBrutEffectif = Math.min(salaireBrut, maxSalaireBrut);
-  const chargesP = computeChargesPatronales(salaireBrutEffectif);
-  const superbrut = salaireBrutEffectif + chargesP;
+
   const maxPer = Math.max(0, Math.floor((caHT - superbrut - totalFraisHorsPer) / 500) * 500);
   const perEffectif = Math.min(per, maxPer);
   const totalFrais = totalFraisHorsPer + perEffectif;
 
   const resultat = Math.max(0, caHT - superbrut - totalFrais);
   const is = Math.min(resultat, seuilIS) * tauxISReduit + Math.max(0, resultat - seuilIS) * tauxISNormal;
-  const maxDivNets = Math.floor((resultat - is) * (1 - tauxFlatTax) / 1000) * 1000;
+  // EURL : dividendes > 10% capital → TNS (~45%), pas flat tax. Approximation prudente.
+  const benefDistrib = resultat - is;
+  let maxDivNets;
+  if (isEurl) {
+    const seuilFlatTax = capitalSocial * 0.10;
+    const divFlatTaxMax = Math.min(benefDistrib, seuilFlatTax);
+    const divTNSMax = Math.max(0, benefDistrib - seuilFlatTax);
+    // Approx : TNS ~45% sur l'excédent
+    maxDivNets = Math.floor((divFlatTaxMax * (1 - tauxFlatTax) + divTNSMax * 0.55) / 1000) * 1000;
+  } else {
+    maxDivNets = Math.floor(benefDistrib * (1 - tauxFlatTax) / 1000) * 1000;
+  }
 
   return {
-    caHT,
-    totalFraisHorsPer,
-    maxSalaireBrut,
-    salaireBrutEffectif,
-    maxPer,
-    perEffectif,
-    maxDivNets,
+    caHT, totalFraisHorsPer, maxSalaireBrut, salaireBrutEffectif,
+    maxPer, perEffectif, maxDivNets,
   };
 }
 
@@ -307,7 +405,7 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 //     NB : valeurs figées — en réalité le prix d'achat croît plus vite que la valeur de service,
 //     érodant le rendement de la complémentaire. Le modèle est légèrement optimiste.
 //   - Trimestres requis génération ~1990 : 172 (43 ans) — service-public.fr/particuliers/vosdroits/F35063
-export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif }) {
+export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme = 'sasu' }) {
   const AGE_DEBUT = 22;
   const AGE_RETRAITE = 67;
   const TRIMESTRES_REQUIS = 172; // génération ~1990
@@ -368,7 +466,24 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
     totalPoints += (t1 * TAUX_T1 + t2 * TAUX_T2) / PRIX_POINT;
   }
 
-  // Points freelance (SASU) — salaire constant
+  // Points freelance — AGIRC-ARRCO (SASU) ou SSI (EURL)
+  if (forme === 'eurl') {
+    // SSI : taux de calcul des points = cotisation / prix d'achat
+    // Cotisation retraite complémentaire SSI : 8,1% ≤ PASS + 9,1% entre 1-4 PASS
+    // Les cotisations sont calculées sur l'assiette (rémunération × 0.74)
+    // Prix d'achat point SSI ≈ 19,04 € (2024), valeur de service ≈ 1,280 €
+    const PRIX_POINT_SSI = 19.04;
+    const VALEUR_POINT_SSI = 1.280;
+    const assietteFL = salaireBrut * (1 - TNS_ABATTEMENT);
+    const t1fSSI = Math.min(assietteFL, PASS_RET);
+    const t2fSSI = Math.min(Math.max(0, assietteFL - PASS_RET), 3 * PASS_RET);
+    const cotRetraiteCompFL = t1fSSI * 0.081 + t2fSSI * 0.091;
+    totalPoints += anneesFreelance * cotRetraiteCompFL / PRIX_POINT_SSI;
+    const retraiteCompMois = Math.round(totalPoints * VALEUR_POINT_SSI / 12);
+    return { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois: retraiteBaseMois + retraiteCompMois };
+  }
+
+  // SASU : AGIRC-ARRCO
   const t1f = Math.min(salaireBrut, PASS_RET);
   const t2f = Math.max(0, Math.min(salaireBrut, 8 * PASS_RET) - PASS_RET);
   totalPoints += anneesFreelance * (t1f * TAUX_T1 + t2f * TAUX_T2) / PRIX_POINT;
@@ -423,6 +538,8 @@ export function computeAll(params) {
     salaireBrutCDI = 45000,
     inflation = 0.02,
     anneesAre = 0,
+    forme = DEFAULTS.forme,
+    capitalSocial = DEFAULTS.capitalSocial,
     rendementCapi: rendementCapi_ = rendementGlobal,
     rendementScpi: rendementScpi_ = rendementGlobal,
     rendementPea:  rendementPea_  = rendementGlobal,
@@ -445,11 +562,24 @@ export function computeAll(params) {
   // --- Frais pro ---
   const totalFrais = Object.values(frais).reduce((a, b) => a + b, 0);
 
-  // --- Charges salaire (calcul exact par tranche) ---
-  const chargesPatronales = computeChargesPatronales(salaireBrut);
-  const superbrut = salaireBrut + chargesPatronales;
-  const cotisationsSalariales = computeCotisationsSalariales(salaireBrut);
-  const salaireNet = salaireBrut - cotisationsSalariales;
+  // --- Charges sociales ---
+  const isEurl = forme === 'eurl';
+  let chargesPatronales, superbrut, cotisationsSalariales, salaireNet, cotisationsTNSResult;
+  if (isEurl) {
+    // EURL : cotisations TNS, pas de patronales/salariales séparées
+    cotisationsTNSResult = computeCotisationsTNS(salaireBrut);
+    chargesPatronales = 0;
+    superbrut = salaireBrut; // la rémunération est le coût direct pour la société
+    cotisationsSalariales = cotisationsTNSResult.total;
+    salaireNet = cotisationsTNSResult.net;
+  } else {
+    // SASU : charges patronales + salariales classiques
+    chargesPatronales = computeChargesPatronales(salaireBrut);
+    superbrut = salaireBrut + chargesPatronales;
+    cotisationsSalariales = computeCotisationsSalariales(salaireBrut);
+    salaireNet = salaireBrut - cotisationsSalariales;
+    cotisationsTNSResult = null;
+  }
 
   // --- Résultat ---
   const totalCharges = superbrut + totalFrais;
@@ -466,15 +596,51 @@ export function computeAll(params) {
 
   // --- Dividendes ---
   const divBrutsMax = benefDistribuable;
-  const divNetsMax = divBrutsMax * (1 - tauxFlatTax);
-  const divNets = Math.min(divNetsVoulus, divNetsMax);
-  const divBrutsSortis = divNets / (1 - tauxFlatTax);
-  const flatTax = divBrutsSortis * tauxFlatTax;
-  const ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
+  let divNets, divBrutsSortis, flatTax, ratioDistrib, divCotisationsTNS = 0, divNetsMax;
+  if (isEurl) {
+    // EURL : dividendes > 10% capital social → cotisations TNS (approche marginale)
+    const seuilFlatTaxDiv = capitalSocial * 0.10;
+    // Solver : trouver divBruts tel que divNets(divBruts) = divNetsVoulus
+    const computeDivNetsEurl = (divBruts) => {
+      const partFlatTax = Math.min(divBruts, seuilFlatTaxDiv);
+      const partTNS = Math.max(0, divBruts - seuilFlatTaxDiv);
+      const netFlatTax = partFlatTax * (1 - tauxFlatTax);
+      // Cotisations TNS marginales sur les dividendes excédentaires
+      const tnsAvec = computeCotisationsTNS(salaireBrut + partTNS);
+      const tnsSans = computeCotisationsTNS(salaireBrut);
+      const cotTNSDiv = tnsAvec.total - tnsSans.total;
+      const netTNS = partTNS - cotTNSDiv;
+      return { net: netFlatTax + netTNS, cotTNSDiv };
+    };
+    // Bisection pour trouver divBruts → divNetsVoulus
+    const maxDivNetsEurl = computeDivNetsEurl(divBrutsMax).net;
+    divNetsMax = maxDivNetsEurl;
+    const divNetsTarget = Math.min(divNetsVoulus, maxDivNetsEurl);
+    let lo = 0, hi = divBrutsMax;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (computeDivNetsEurl(mid).net < divNetsTarget) lo = mid; else hi = mid;
+    }
+    divBrutsSortis = Math.round((lo + hi) / 2);
+    const divResult = computeDivNetsEurl(divBrutsSortis);
+    divNets = Math.round(divResult.net);
+    divCotisationsTNS = Math.round(divResult.cotTNSDiv);
+    flatTax = Math.min(divBrutsSortis, seuilFlatTaxDiv) * tauxFlatTax;
+    ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
+  } else {
+    // SASU : flat tax simple
+    divNetsMax = divBrutsMax * (1 - tauxFlatTax);
+    divNets = Math.min(divNetsVoulus, divNetsMax);
+    divBrutsSortis = divNets / (1 - tauxFlatTax);
+    flatTax = divBrutsSortis * tauxFlatTax;
+    ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
+  }
 
   // --- IR (barème 2025) ---
-  // Abattement 10% sur salaires, plafonné à 14 171 € (CGI art. 83-3°, 2025)
-  const netImposable = computeNetImposable(salaireBrut);
+  // Abattement 10% sur salaires/rémunération gérant (CGI art. 83-3° / art. 62)
+  const netImposable = isEurl
+    ? computeNetImposableTNS(salaireBrut, cotisationsTNSResult)
+    : computeNetImposable(salaireBrut);
   const revenuImposableVous = netImposable - Math.min(netImposable * abattementIR, plafondAbattementSalaire);
   const revenuImposableConjoint = revenuConjoint - Math.min(revenuConjoint * abattementIR, plafondAbattementSalaire);
   const revenuImposableFoyer = revenuImposableVous + revenuImposableConjoint;
@@ -597,7 +763,10 @@ export function computeAll(params) {
   let areResultatAvantIS = 0, areIS = 0, areBenefDistribuable = 0, areResteSASU = 0;
   let areContratCapi = 0, areScpi = 0, areScpiNet = 0, areReserveTreso = 0, arePer = 0;
   let areMensuelNet = 0;
-  const anneesAreEff = Math.min(anneesAre, ageObjectif - ageActuel); // cap à la durée freelance
+  // Plafond 60% des droits (réforme avril 2025, France Travail).
+  // Le paramètre anneesAre = durée totale des droits. Le créateur ne peut consommer
+  // automatiquement que 60% ; les 40% restants nécessitent une demande IPR.
+  const anneesAreEff = Math.min(Math.round(anneesAre * 0.6 * 10) / 10, ageObjectif - ageActuel);
   if (anneesAreEff > 0) {
     areResultatAvantIS = Math.max(0, caHT - totalFrais); // pas de superbrut (0 salaire)
     areIS = Math.min(areResultatAvantIS, seuilIS) * tauxISReduit
@@ -618,17 +787,25 @@ export function computeAll(params) {
   const netNetMensuel = netNetAnnuel / 12;
 
   // --- Prévoyance ---
-  const ijSecuJour = Math.min(salaireBrut, 48060) * 0.5 / 365;
+  let ijSecuJour, complementPrevoyance, capitalDeces;
+  if (isEurl) {
+    // TNS : IJ = 1/730 du revenu annuel moyen (plafonné PASS), délai de carence 3 jours
+    ijSecuJour = Math.min(salaireBrut, PASS) / 730;
+    complementPrevoyance = 0; // pas de prévoyance décès cadre obligatoire en EURL
+    capitalDeces = 0; // pas de prévoyance décès cadre
+  } else {
+    ijSecuJour = Math.min(salaireBrut, 48060) * 0.5 / 365;
+    complementPrevoyance = salaireBrut * 0.4 / 12;
+    capitalDeces = salaireBrut * 3;
+  }
   const ijSecuMois = ijSecuJour * 30;
-  const complementPrevoyance = salaireBrut * 0.4 / 12;
   const totalCouvertMois = ijSecuMois + complementPrevoyance;
   const provisionRisque = netNetMensuel * 6;
-  const capitalDeces = salaireBrut * 3;
 
   // --- Projection COMPLÈTE ageActuel → ageFin ---
   const annees = ageObjectif - ageActuel;
   const ageRetraite = 67;
-  const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif });
+  const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme });
   // Phase 2 "lever le pied" : modèle de coûts propre
   // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle, prévoyance)
   // CA missions → résultat → IS → dividendes flat tax
@@ -1171,6 +1348,8 @@ export function computeAll(params) {
     // ARE
     anneesAre: anneesAreEff, areResultatAvantIS, areIS, areBenefDistribuable,
     areResteSASU, areContratCapi, areScpi, areReserveTreso, areMensuelNet,
+    // EURL
+    forme, capitalSocial, cotisationsTNSResult, divCotisationsTNS,
   };
 }
 
@@ -1626,8 +1805,11 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, ratioTreso, ratioCapi, salaireBrutCDI, anneesAre, r }) {
+  const isEurl = r.forme === 'eurl';
+  const formeLabel = isEurl ? 'EURL' : 'SASU';
   const areFlag = r.anneesAre > 0 ? ` --anneesAre ${r.anneesAre} --salaireBrutCDI ${salaireBrutCDI}` : '';
-  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendementCapi ${rendementCapi} --rendementScpi ${rendementScpi} --rendementPea ${rendementPea} --rendementPer ${rendementPer} --inflation ${inflation} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}${areFlag}`;
+  const formeFlag = isEurl ? ` --forme eurl --capitalSocial ${r.capitalSocial}` : '';
+  const cmd = `node cli.js --step4 --tjm ${tjm} --jours ${jours} --salaireBrut ${salaireBrut} --per ${per} --divNetsVoulus ${divNetsVoulus} --rendementCapi ${rendementCapi} --rendementScpi ${rendementScpi} --rendementPea ${rendementPea} --rendementPer ${rendementPer} --inflation ${inflation} --ageActuel ${ageActuel} --ageObjectif ${ageObjectif} --joursLeverLePied ${joursLeverLePied} --croquerCapital ${croquerCapital} --ageFin ${ageFin} --ratioTreso ${ratioTreso} --ratioCapi ${ratioCapi}${areFlag}${formeFlag}`;
 
   const L = [];
   L.push(`$ ${cmd}`);
@@ -1648,19 +1830,38 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   L.push('');
 
   // Step 3
-  L.push(`═══ STEP 3 : RÉPARTITION & RÉSULTAT ═══`);
-  L.push(`  Salaire brut    : ${fmt(salaireBrut)} → superbrut ${fmt(r.superbrut)}`);
-  L.push(`  Salaire net     : ${fmt(r.salaireNet)}`);
+  L.push(`═══ STEP 3 : RÉPARTITION & RÉSULTAT (${formeLabel}) ═══`);
+  if (isEurl) {
+    const tns = r.cotisationsTNSResult;
+    L.push(`  Rémunération     : ${fmt(salaireBrut)} (coût société = rémunération)`);
+    L.push(`  Cotisations TNS  : ${fmt(tns.total)} (${fmtPct(tns.tauxEffectif)})`);
+    L.push(`    Maladie        : ${fmt(tns.maladie + tns.maladieIJ)}`);
+    L.push(`    Retraite base  : ${fmt(tns.retraiteBase)}`);
+    L.push(`    Retraite compl.: ${fmt(tns.retraiteCompl)} (SSI)`);
+    L.push(`    Invalidité     : ${fmt(tns.invaliditeDeces)}`);
+    L.push(`    AF             : ${fmt(tns.af)}`);
+    L.push(`    CSG-CRDS       : ${fmt(tns.csgCrds)}`);
+    L.push(`    CFP            : ${fmt(tns.cfp)}`);
+    L.push(`  Net gérant       : ${fmt(r.salaireNet)}`);
+  } else {
+    L.push(`  Salaire brut    : ${fmt(salaireBrut)} → superbrut ${fmt(r.superbrut)}`);
+    L.push(`  Salaire net     : ${fmt(r.salaireNet)}`);
+  }
   L.push(`  Résultat av. IS : ${fmt(r.resultatAvantIS)}`);
   L.push(`  IS (${fmtPct(r.tauxEffectifIS)})    : ${fmt(r.isTotal)}`);
   L.push(`  Bénéf. distrib. : ${fmt(r.benefDistribuable)}`);
-  L.push(`  Dividendes nets : ${fmt(r.divNets)} (flat tax: ${fmt(r.flatTax)})`);
+  if (isEurl && r.divCotisationsTNS > 0) {
+    L.push(`  Dividendes nets : ${fmt(r.divNets)} (flat tax: ${fmt(r.flatTax)} + TNS div: ${fmt(r.divCotisationsTNS)})`);
+    L.push(`    ⚠ Div. > 10% capital (${fmt(r.capitalSocial)}) → cotisations TNS`);
+  } else {
+    L.push(`  Dividendes nets : ${fmt(r.divNets)} (flat tax: ${fmt(r.flatTax)})`);
+  }
   L.push(`  IR (votre part) : ${fmt(r.votreIR)} (TMI: ${fmtPct(r.tmi)})`);
   L.push(`  ► NET NET /AN   : ${fmt(r.netNetAnnuel)}`);
   L.push(`  ► NET NET /MOIS : ${fmt(r.netNetMensuel)}`);
   L.push('');
   L.push(`  Capitalisation :`);
-  L.push(`    Reste en SASU     : ${fmt(r.resteSASU)}`);
+  L.push(`    Reste en ${formeLabel}     : ${fmt(r.resteSASU)}`);
   L.push(`    Contrat capi      : ${fmt(r.contratCapi)}`);
   L.push(`    SCPI              : ${fmt(r.scpi)}`);
   L.push(`    Provision risque   : ${fmt(r.reserveTreso)}`);
@@ -1736,7 +1937,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   const age75 = r.projection.find(p => p.age === 75);
   L.push('  Jalons de vie (€ 2026) :');
   if (r.anneesAre > 0) {
-    L.push(`    ARE (maintenant)     : ${fmt(r.areMensuelNet)}/mois (chômage) + SASU capitalise ${fmt(r.areResteSASU)}/an`);
+    L.push(`    ARE (maintenant)     : ${fmt(r.areMensuelNet)}/mois (chômage) + ${formeLabel} capitalise ${fmt(r.areResteSASU)}/an`);
     L.push(`    Freelance (${ageActuel + r.anneesAre} ans)   : ${fmt(r.netNetMensuel)}/mois`);
   } else {
     L.push(`    Freelance (maintenant): ${fmt(r.netNetMensuel)}/mois`);

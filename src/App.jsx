@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, ComposedChart } from "recharts";
-import { computeAll, computeChargesPatronales, computeConstraints, computeMonteCarloProjection, DEFAULTS, formatReport } from "./model.js";
+import { computeAll, computeChargesPatronales, computeConstraints, computeCotisationsTNS, computeMonteCarloProjection, DEFAULTS, formatReport } from "./model.js";
 
 // ============================================================
 // COMPOSANTS UI
@@ -264,6 +264,8 @@ function getUrlParams() {
     inflation: num('inflation', DEFAULTS.inflation),
     partsFiscales: num('partsFiscales', DEFAULTS.partsFiscales),
     anneesAre: num('anneesAre', DEFAULTS.anneesAre),
+    forme: p.get('forme') || DEFAULTS.forme,
+    capitalSocial: num('capitalSocial', DEFAULTS.capitalSocial),
   };
 }
 
@@ -295,15 +297,18 @@ export default function App() {
   const [inflation, setInflation] = useState(INIT.inflation);
   const [partsFiscales, setPartsFiscales] = useState(INIT.partsFiscales);
   const [anneesAre] = useState(INIT.anneesAre); // read-only depuis l'URL, pas de slider UI
+  const [forme, setForme] = useState(INIT.forme);
+  const [capitalSocial] = useState(INIT.capitalSocial);
+  const isEurl = forme === 'eurl';
 
   const [frais] = useState(DEFAULTS.frais);
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
 
   // Contraintes dynamiques (calcul exact des charges patronales par tranche)
-  const c = computeConstraints({ tjm, jours, frais, salaireBrut, per });
+  const c = computeConstraints({ tjm, jours, frais, salaireBrut, per, forme, capitalSocial });
   const { maxSalaireBrut, salaireBrutEffectif, maxPer, perEffectif, maxDivNets } = c;
-  const superbrut_ = salaireBrutEffectif + computeChargesPatronales(salaireBrutEffectif);
+  const superbrut_ = isEurl ? salaireBrutEffectif : salaireBrutEffectif + computeChargesPatronales(salaireBrutEffectif);
   const fraisAvecPer = { ...frais, per: perEffectif };
   const totalFrais = totalFraisHorsPer + perEffectif;
   const divNetsEffectif = Math.max(0, Math.min(divNetsVoulus, maxDivNets));
@@ -313,13 +318,14 @@ export default function App() {
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
     frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif,
     croquerCapital, ageFin, joursLeverLePied,
-    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso, anneesAre
+    ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso, anneesAre,
+    forme, capitalSocial
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
 
   // Monte Carlo — 500 simulations avec rendements stochastiques
-  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre]);
+  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -347,10 +353,11 @@ export default function App() {
     set('ratioCapi', ratioCapi, DEFAULTS.ratioCapi);
     set('inflation', inflation, DEFAULTS.inflation);
     set('partsFiscales', partsFiscales, DEFAULTS.partsFiscales);
+    set('forme', forme, DEFAULTS.forme);
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, peaPerso, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, peaPerso, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales, forme]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -383,8 +390,19 @@ export default function App() {
       <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '24px 0 20px', marginBottom: 24 }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-              Simulateur Freelance SASU
+            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 12 }}>
+              Simulateur Freelance
+              <span style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)' }}>
+                {['sasu', 'eurl'].map(f => (
+                  <button key={f} onClick={() => setForme(f)} style={{
+                    padding: '4px 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                    border: 'none', fontFamily: "'DM Sans', sans-serif",
+                    background: forme === f ? '#fff' : 'transparent',
+                    color: forme === f ? '#1a365d' : 'rgba(255,255,255,0.7)',
+                    transition: 'all 0.2s',
+                  }}>{f.toUpperCase()}</button>
+                ))}
+              </span>
             </h1>
             <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
               J'ai <input type="number" min={20} max={65} value={ageActuel}
@@ -471,23 +489,40 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {/* Colonne salaire */}
             <div style={{ padding: 12, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Salaire président</div>
-              <Slider label="Salaire brut annuel" value={salaireBrutEffectif} onChange={setSalaireBrut} min={30000} max={maxSalaireBrut} step={5000} />
-              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                <span>Superbrut (brut + 42% patronales)</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.superbrut)}</span>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {isEurl ? 'Rémunération gérant' : 'Salaire président'}
               </div>
-              <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                <span>Net perso ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
-              </div>
+              <Slider label={isEurl ? "Rémunération annuelle" : "Salaire brut annuel"} value={salaireBrutEffectif} onChange={setSalaireBrut} min={30000} max={maxSalaireBrut} step={5000} />
+              {isEurl ? (
+                <>
+                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span>Cotisations TNS ({fmtPct(r.cotisationsTNSResult?.tauxEffectif || 0)})</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.cotisationsTNSResult?.total || 0)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                    <span>Net gérant ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span>Superbrut (brut + {fmtPct(r.chargesPatronales / salaireBrutEffectif)} patronales)</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.superbrut)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                    <span>Net perso ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
+                  </div>
+                </>
+              )}
             </div>
             {/* Colonne PER */}
             <div style={{ padding: 12, background: '#faf5ff', borderRadius: 8, border: '1px solid #d6bcfa' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#553c9a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PER — Plan d'Épargne Retraite</div>
               <Slider label="Versement annuel PER" value={perEffectif} onChange={setPer} min={0} max={maxPer} step={500} />
               <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 0, fontStyle: 'italic' }}>
-                Versé par la SASU, déduit du résultat (réduit l'IS) — bloqué jusqu'à 64 ans
+                Versé par la {isEurl ? 'société' : 'SASU'}, déduit du résultat (réduit l'IS) — bloqué jusqu'à 64 ans
               </div>
             </div>
           </div>
@@ -511,11 +546,11 @@ export default function App() {
               <summary style={{ fontSize: 11, color: '#975a16', cursor: 'pointer', fontWeight: 600 }}>Détail du compte de résultat</summary>
               <div style={{ marginTop: 8, padding: '8px 0' }}>
                 <Row label="Chiffre d'affaires HT" value={fmt(r.caHT)} bold sub={`${fmt(tjm)} × ${jours} jours`} />
-                <Row label="Rémunération président (superbrut)" value={`- ${fmt(r.superbrut)}`} sub={`brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(r.chargesPatronales / salaireBrutEffectif)} [1]`} />
+                <Row label={isEurl ? "Rémunération gérant" : "Rémunération président (superbrut)"} value={`- ${fmt(r.superbrut)}`} sub={isEurl ? `rémunération ${fmt(salaireBrutEffectif)} (cotisations TNS ${fmtPct(r.cotisationsTNSResult?.tauxEffectif || 0)} incluses)` : `brut ${fmt(salaireBrutEffectif)} + cotisations patronales ${fmtPct(r.chargesPatronales / salaireBrutEffectif)} [1]`} />
                 <Row label="Charges d'exploitation" value={`- ${fmt(r.totalFrais)}`} sub="comptable, RC Pro, prévoyance, mutuelle, PER, bureau..." />
                 <Row label="Résultat fiscal avant IS" value={fmt(r.resultatAvantIS)} bold />
                 <Row label="Impôt sur les sociétés (IS)" value={`- ${fmt(r.isTotal)}`} sub={`taux effectif ${fmtPct(r.tauxEffectifIS)} — barème : 15% → 42 500 € puis 25% [2]`} />
-                <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub="montant max que la SASU peut vous verser en dividendes" />
+                <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub={`montant max que la ${isEurl ? 'société' : 'SASU'} peut vous verser en dividendes`} />
               </div>
             </details>
           </div>
@@ -525,8 +560,13 @@ export default function App() {
             <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</div>
             <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 12, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
               <span>Bénéfice distribuable : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</b></span>
-              <span>→ après flat tax (31,4%) : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b> nets max</span>
+              <span>→ {isEurl ? 'nets max (flat tax + TNS)' : 'après flat tax (31,4%)'} : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b></span>
             </div>
+            {isEurl && (
+              <div style={{ fontSize: 11, color: '#9b2c2c', marginBottom: 8, padding: '6px 8px', background: '#fff5f5', borderRadius: 4, border: '1px solid #fc8181' }}>
+                ⚠ EURL : dividendes {'>'} 10% du capital social ({fmt(capitalSocial)}) → cotisations TNS (~45%) au lieu de flat tax 31,4%
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
               {/* Colonne gauche : Dividendes */}
               <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
@@ -546,7 +586,7 @@ export default function App() {
               </div>
               {/* Colonne droite : Reste en SASU */}
               <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en SASU — {fmt(r.resteSASU)}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en {isEurl ? 'EURL' : 'SASU'} — {fmt(r.resteSASU)}</div>
                 <div style={{ fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées du graphique pour répartir</div>
                 <PieSlider
                   v1={ratioTreso} v2={ratioCapi}
@@ -564,9 +604,9 @@ export default function App() {
 
           {/* NET NET */}
           <Card title="Net net — à consommer" subtitle="Ce qui atterrit sur votre compte perso, après charges, IS, flat tax et IR" accent="#38a169">
-            <Row label="Salaire net" value={fmt(r.salaireNet)} sub={`${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrutEffectif)} moins cotisations salariales (28%) [3]`} />
-            <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub="le reste capitalise dans la SASU" />
-            <Row label="Prélèvement forfaitaire unique (flat tax 31,4%)" value={`- ${fmt(r.flatTax)}`} sub="12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]" />
+            <Row label={isEurl ? "Net gérant (après TNS)" : "Salaire net"} value={fmt(r.salaireNet)} sub={isEurl ? `${fmt(Math.round(r.salaireNet/12))} /mois — rémunération ${fmt(salaireBrutEffectif)} moins cotisations TNS (${fmtPct(r.cotisationsTNSResult?.tauxEffectif || 0)})` : `${fmt(Math.round(r.salaireNet/12))} /mois — brut ${fmt(salaireBrutEffectif)} moins cotisations salariales (28%) [3]`} />
+            <Row label={`Dividendes bruts sortis (${fmtPct(r.ratioDistrib)} du distribuable)`} value={fmt(r.divBrutsSortis)} sub={`le reste capitalise dans la ${isEurl ? 'société' : 'SASU'}`} />
+            <Row label={isEurl && r.divCotisationsTNS > 0 ? `Flat tax + cotisations TNS div.` : "Prélèvement forfaitaire unique (flat tax 31,4%)"} value={`- ${fmt(r.flatTax + (r.divCotisationsTNS || 0))}`} sub={isEurl && r.divCotisationsTNS > 0 ? `flat tax ${fmt(r.flatTax)} + TNS sur div. excédentaires ${fmt(r.divCotisationsTNS)}` : "12,8% IR + 18,6% prélèvements sociaux — prélevé à la source [4]"} />
             <Row label="Dividendes nets encaissés" value={fmt(r.divNets)} sub={`${fmt(Math.round(r.divNets/12))} /mois sur votre compte`} />
             <div style={{ margin: '8px 0 4px', padding: '8px 12px', background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
               <Slider label="Parts fiscales du foyer" value={partsFiscales} onChange={setPartsFiscales} min={1} max={5} step={0.5} format="num" suffix=" parts" />
@@ -587,8 +627,8 @@ export default function App() {
           </Card>
 
           {/* CAPITALISATION */}
-          <Card title="Capitalisation automatique" subtitle="L'argent qui reste dans la SASU et travaille pour vous, sans y toucher" accent="#9b2c2c">
-            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - r.ratioDistrib)} du distribuable reste dans la SASU`} />
+          <Card title="Capitalisation automatique" subtitle={`L'argent qui reste dans la ${isEurl ? 'société' : 'SASU'} et travaille pour vous, sans y toucher`} accent="#9b2c2c">
+            <Row label="Bénéfice non distribué" value={fmt(r.resteSASU)} bold sub={`${fmtPct(1 - r.ratioDistrib)} du distribuable reste dans la ${isEurl ? 'société' : 'SASU'}`} />
             <Row label="→ Contrat de capitalisation luxembourgeois (65%)" value={fmt(r.contratCapi)} sub="flexible, super-privilège, pas de plafond de garantie [9]" />
             <Row label="→ Usufruit temporaire SCPI (20%)" value={fmt(r.scpi)} sub="rendement immobilier + amortissement fiscal sur 5 ans" />
             <Row label="→ Réserve de trésorerie SASU (15%)" value={fmt(r.reserveTreso)} sub="renforce le matelas intercontrat" />
@@ -599,11 +639,11 @@ export default function App() {
 
           {/* PRÉVOYANCE */}
           <Card title="Protection sociale & prévoyance" subtitle="Vos filets de sécurité en cas d'arrêt maladie, invalidité ou décès" accent="#d69e2e">
-            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub="régime général, plafonné au PASS (48 060 €/an) [7]" />
-            <Row label="Complément prévoyance (contrat SASU)" value={`${fmt(r.complementPrevoyance)} /mois`} sub="incapacité/invalidité — ~3 000 €/an de cotisation" />
+            <Row label="Indemnités journalières Sécu (CPAM)" value={`${fmt(r.ijSecuMois)} /mois`} sub={isEurl ? "régime TNS, plafonné au PASS — plus faible que le régime général" : "régime général, plafonné au PASS (48 060 €/an) [7]"} />
+            <Row label={isEurl ? "Complément prévoyance (facultatif)" : "Complément prévoyance (contrat SASU)"} value={`${fmt(r.complementPrevoyance)} /mois`} sub={isEurl ? "pas de prévoyance décès cadre obligatoire en EURL" : "incapacité/invalidité — ~3 000 €/an de cotisation"} />
             <Row label="Total maintien de revenu en arrêt" value={`${fmt(r.totalCouvertMois)} /mois`} bold sub="sécu + prévoyance combinés" />
             <Row label="Découvert vs train de vie" value={`${fmt(Math.max(0, r.netNetMensuel - r.totalCouvertMois))} /mois`} sub="couvert par la trésorerie de sécurité de la SASU" />
-            <Row label="Provision pour risque" value={fmt(r.provisionRisque)} bold highlight sub={`6 mois de net net — constituée par la réserve de trésorerie (${fmt(r.reserveTreso)}/an)`} />
+            <Row label="Provision pour risque" value={fmt(r.provisionRisque)} bold highlight sub={`6 mois de net net — constituée par la réserve de trésorerie de la ${isEurl ? 'société' : 'SASU'} (${fmt(r.reserveTreso)}/an)`} />
             <Row label="Capital décès (contrat prévoyance)" value={fmt(r.capitalDeces)} sub="~3× salaire brut annuel, versé à votre famille" />
           </Card>
         </div>
@@ -613,7 +653,7 @@ export default function App() {
           boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
           <Stat label="Net net mensuel — à consommer" value={fmt(r.netNetMensuel)} color="#22543d" big />
-          <Stat label="CA HT annuel" value={fmtK(r.caHT)} sub="chiffre d'affaires de la SASU" />
+          <Stat label="CA HT annuel" value={fmtK(r.caHT)} sub={`chiffre d'affaires de la ${isEurl ? 'société' : 'SASU'}`} />
           <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
           <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
           <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle prudente"} />
