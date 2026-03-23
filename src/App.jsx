@@ -297,11 +297,16 @@ export default function App() {
   const [inflation, setInflation] = useState(INIT.inflation);
   const [partsFiscales, setPartsFiscales] = useState(INIT.partsFiscales);
   const [anneesAre] = useState(INIT.anneesAre); // read-only depuis l'URL, pas de slider UI
-  const [forme, setForme] = useState(INIT.forme);
+  const [forme, setFormeRaw] = useState(INIT.forme);
   const [capitalSocial] = useState(INIT.capitalSocial);
   const isEurl = forme === 'eurl';
 
-  const [frais] = useState(DEFAULTS.frais);
+  const [frais, setFrais] = useState({ ...(INIT.forme === 'eurl' ? DEFAULTS.fraisEurl : DEFAULTS.frais) });
+  const updateFrais = (key, value) => setFrais(prev => ({ ...prev, [key]: value }));
+  const setForme = (f) => {
+    setFormeRaw(f);
+    setFrais({ ...(f === 'eurl' ? DEFAULTS.fraisEurl : DEFAULTS.frais) });
+  };
   const caHT = tjm * jours;
   const totalFraisHorsPer = Object.values(frais).reduce((a, b) => a + b, 0);
 
@@ -451,25 +456,31 @@ export default function App() {
         {/* ÉTAPE 2 : CHARGES FIXES */}
         <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
         <Card title="2. Charges fixes d'exploitation" subtitle="Ce que la société paie quoi qu'il arrive — non lié à votre rémunération" accent="#e53e3e">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-            {Object.entries(frais).map(([k, v]) => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 12 }}>
+            {Object.entries(frais).filter(([k]) => k !== 'per').map(([k, v]) => {
               const labels = {
                 comptable: 'Comptable', rcPro: 'RC Pro', cfe: 'CFE', banque: 'Banque', bureau: 'Bureau',
-                mutuelle: 'Mutuelle', prevoyance: 'Prévoyance', materiel: 'Matériel', chequesVacances: 'Chèques-vacances',
-                divers: 'Divers', per: 'PER'
+                mutuelle: 'Mutuelle', prevoyance: 'Prévoyance', materiel: 'Matériel', chequesVacances: 'Chèq. vacances',
+                divers: 'Divers'
               };
               const tooltips = {
-                cfe: "Cotisation Foncière des Entreprises — impôt local dû par toute entreprise, même sans locaux. Montant variable selon la commune.",
-                per: "Plan d'Épargne Retraite — versement déductible du résultat (réduit l'IS). Capital bloqué jusqu'à 64 ans sauf cas de déblocage anticipé (achat résidence principale, etc.).",
-                rcPro: "Responsabilité Civile Professionnelle — assurance obligatoire couvrant les dommages causés à vos clients dans le cadre de vos missions.",
-                prevoyance: "Contrat de prévoyance complémentaire — couvre l'incapacité de travail, l'invalidité et le décès au-delà des garanties du régime général.",
-                mutuelle: "Complémentaire santé — non obligatoire pour un dirigeant SASU mais fortement recommandée. Déductible du résultat.",
-                chequesVacances: "Chèques-vacances ANCV — exonérés de cotisations sociales et d'impôt sur le revenu dans la limite du SMIC mensuel.",
+                cfe: "Cotisation Foncière des Entreprises",
+                rcPro: "Responsabilité Civile Professionnelle",
+                prevoyance: "Prévoyance complémentaire (incapacité, invalidité, décès)",
+                mutuelle: "Complémentaire santé — facultative pour le dirigeant",
+                chequesVacances: "Chèques-vacances ANCV — exonérés de cotisations et d'IR",
               };
               return (
-              <div key={k} title={tooltips[k] || ''} style={{ fontSize: 11, padding: '4px 10px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0', fontFamily: "'JetBrains Mono', monospace", cursor: tooltips[k] ? 'help' : 'default' }}>
-                {labels[k] || k} : {fmt(v)}{tooltips[k] ? ' ⓘ' : ''}
-              </div>
+                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                  <span style={{ color: '#4a5568', whiteSpace: 'nowrap', minWidth: 70 }} title={tooltips[k] || ''}>
+                    {labels[k] || k}{tooltips[k] ? ' ⓘ' : ''}
+                  </span>
+                  <input type="number" min={0} max={20000} step={100} value={v}
+                    onChange={e => updateFrais(k, Math.max(0, parseInt(e.target.value) || 0))}
+                    style={{ width: '100%', padding: '3px 6px', fontSize: 11, fontWeight: 600,
+                      fontFamily: "'JetBrains Mono', monospace", color: '#1a365d',
+                      border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff', textAlign: 'right' }} />
+                </div>
               );
             })}
           </div>

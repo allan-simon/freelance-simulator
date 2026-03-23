@@ -41,6 +41,12 @@ export const DEFAULTS = {
     mutuelle: 1200, prevoyance: 3000, materiel: 2000, chequesVacances: 547,
     divers: 1500
   },
+  // EURL : pas de prévoyance décès cadre obligatoire, mutuelle facultative
+  fraisEurl: {
+    comptable: 2500, rcPro: 800, cfe: 500, banque: 300, bureau: 2000,
+    mutuelle: 600, prevoyance: 0, materiel: 2000, chequesVacances: 547,
+    divers: 1500
+  },
   // Constantes réglementaires 2026
   // Fiscalité nette par enveloppe (1 - prélèvements) — utilisée pour pondérer les retraits
   // fiscNetteCapi : calculée dynamiquement (IS sur gains + flat tax sur distribution)
