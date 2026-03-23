@@ -393,36 +393,16 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet" />
       <style>{`input.no-spin::-webkit-outer-spin-button,input.no-spin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input.no-spin{-moz-appearance:textfield}`}</style>
 
-      <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '24px 0 20px', marginBottom: 24 }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 12 }}>
-              Simulateur Freelance
-              <span style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)' }}>
-                {['sasu', 'eurl'].map(f => (
-                  <button key={f} onClick={() => setForme(f)} style={{
-                    padding: '4px 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
-                    border: 'none', fontFamily: "'DM Sans', sans-serif",
-                    background: forme === f ? '#fff' : 'transparent',
-                    color: forme === f ? '#1a365d' : 'rgba(255,255,255,0.7)',
-                    transition: 'all 0.2s',
-                  }}>{f.toUpperCase()}</button>
-                ))}
-              </span>
-            </h1>
-            <p style={{ color: '#bee3f8', fontSize: 13, margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-              J'ai <input type="number" min={20} max={65} value={ageActuel}
-                onChange={e => setAgeActuel(Math.max(20, Math.min(65, parseInt(e.target.value) || 20)))}
-                style={{ width: 42, padding: '2px 4px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.3)',
-                  background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, fontWeight: 700,
-                  textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }} /> ans · Toutes formules vérifiables
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '14px 0', marginBottom: 0 }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
+            Simulateur Freelance
+          </h1>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button onClick={handleCopyLLM} style={{
               background: copied ? '#38a169' : 'rgba(255,255,255,0.15)',
               color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
               cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               transition: 'all 0.2s',
             }}>
@@ -431,12 +411,42 @@ export default function App() {
             <button onClick={handleShare} style={{
               background: 'rgba(255,255,255,0.15)',
               color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
               cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               transition: 'all 0.2s',
             }}>
               Partager
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Barre profil : forme juridique + âge */}
+      <div style={{ background: '#edf2f7', borderBottom: '1px solid #e2e8f0', padding: '10px 0', marginBottom: 20 }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#4a5568' }}>Forme juridique</span>
+            <span style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid #cbd5e0' }}>
+              {['sasu', 'eurl'].map(f => (
+                <button key={f} onClick={() => setForme(f)} style={{
+                  padding: '4px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  border: 'none', fontFamily: "'DM Sans', sans-serif",
+                  background: forme === f ? '#2563eb' : '#fff',
+                  color: forme === f ? '#fff' : '#4a5568',
+                  transition: 'all 0.2s',
+                }}>{f.toUpperCase()}</button>
+              ))}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#4a5568' }}>Âge</span>
+            <input type="number" min={20} max={65} value={ageActuel}
+              onChange={e => setAgeActuel(Math.max(20, Math.min(65, parseInt(e.target.value) || 20)))}
+              className="no-spin"
+              style={{ width: 42, padding: '4px 6px', borderRadius: 6, border: '1px solid #cbd5e0',
+                background: '#fff', color: '#1a365d', fontSize: 13, fontWeight: 700,
+                textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }} />
+            <span style={{ fontSize: 13, color: '#4a5568' }}>ans</span>
           </div>
         </div>
       </div>
