@@ -402,7 +402,9 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
-// Hypothèses : début carrière à 22 ans, taux plein à 67 ans, pas de cotisation après ageObjectif
+// Hypothèses : début carrière à 22 ans, taux plein à 67 ans
+// En EURL : les dividendes > 10% capital sont soumis aux cotisations TNS (dont retraite SSI),
+// générant des points supplémentaires en phase active ET en phase "lever le pied" (jusqu'à 67 ans).
 // Sources :
 //   - Pension base : SAM × 50% × prorata — service-public.fr/particuliers/vosdroits/F21552
 //   - SAM (25 meilleures années plafonnées PASS) — legislation.cnav.fr
@@ -411,7 +413,12 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 //     NB : valeurs figées — en réalité le prix d'achat croît plus vite que la valeur de service,
 //     érodant le rendement de la complémentaire. Le modèle est légèrement optimiste.
 //   - Trimestres requis génération ~1990 : 172 (43 ans) — service-public.fr/particuliers/vosdroits/F35063
-export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme = 'sasu' }) {
+export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme = 'sasu',
+  // EURL : assiette dividendes soumise aux cotisations TNS (div bruts - seuil 10% capital)
+  divBrutsTNSAnnuel = 0,
+  // EURL : distribution annuelle en phase "lever le pied" (drawdown brut avant TNS)
+  drawdownBrutAnnuel = 0,
+}) {
   const AGE_DEBUT = 22;
   const AGE_RETRAITE = 67;
   const TRIMESTRES_REQUIS = 172; // génération ~1990
@@ -419,7 +426,10 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
 
   const anneesCDI = Math.max(0, ageActuel - AGE_DEBUT);
   const anneesFreelance = Math.max(0, Math.min(ageObjectif, AGE_RETRAITE) - ageActuel);
-  const totalAnnees = anneesCDI + anneesFreelance;
+  // EURL : les distributions en phase "lever le pied" sont soumises TNS → valident des trimestres
+  const anneesLeverLePiedEurl = (forme === 'eurl' && drawdownBrutAnnuel > 0)
+    ? Math.max(0, AGE_RETRAITE - Math.max(ageObjectif, ageActuel)) : 0;
+  const totalAnnees = anneesCDI + anneesFreelance + anneesLeverLePiedEurl;
   const trimestres = Math.min(totalAnnees * 4, TRIMESTRES_REQUIS);
 
   // SAM : 25 meilleures années, salaires plafonnés au PASS
@@ -429,7 +439,9 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   // Courbe salariale CDI : progression ~2,5%/an nominal (inflation + ancienneté/mérite)
   // salaireBrutCDI = salaire actuel (point d'arrivée), on reconstitue la trajectoire
   const PROGRESSION_SAL = 0.025; // 2,5%/an nominal — INSEE cadres, moyenne long terme
-  const salFL = Math.min(salaireBrut, PASS_RET);
+  // EURL : les dividendes > 10% capital sont du revenu d'activité TNS (CSS art. L131-6)
+  // → ils cotisent à la retraite de base SSI et entrent dans le SAM
+  const salFL = Math.min(salaireBrut + (forme === 'eurl' ? divBrutsTNSAnnuel : 0), PASS_RET);
 
   // Reconstituer les salaires CDI année par année (du plus ancien au plus récent)
   const salairesCDI = [];
@@ -443,9 +455,12 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   if (totalAnnees <= 0) {
     sam = 0;
   } else {
-    // Collecter toutes les années (CDI progressif + freelance constant)
+    // Collecter toutes les années (CDI progressif + freelance constant + lever le pied EURL)
     const years = [...salairesCDI];
     for (let i = 0; i < anneesFreelance; i++) years.push(salFL);
+    // EURL lever le pied : assiette = drawdown brut (plafonné PASS pour la retraite de base)
+    const salLeverLePied = Math.min(drawdownBrutAnnuel, PASS_RET);
+    for (let i = 0; i < anneesLeverLePiedEurl; i++) years.push(salLeverLePied);
     // Prendre les 25 meilleures (ou toutes si moins de 25 ans)
     years.sort((a, b) => b - a);
     const n = Math.min(25, years.length);
@@ -476,15 +491,24 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
   if (forme === 'eurl') {
     // SSI : taux de calcul des points = cotisation / prix d'achat
     // Cotisation retraite complémentaire SSI : 8,1% ≤ PASS + 9,1% entre 1-4 PASS
-    // Les cotisations sont calculées sur l'assiette (rémunération × 0.74)
+    // L'assiette TNS inclut rémunération + dividendes > 10% capital (CSS art. L131-6)
     // Prix d'achat point SSI ≈ 19,04 € (2024), valeur de service ≈ 1,280 €
     const PRIX_POINT_SSI = 19.04;
     const VALEUR_POINT_SSI = 1.280;
-    const assietteFL = salaireBrut * (1 - TNS_ABATTEMENT);
-    const t1fSSI = Math.min(assietteFL, PASS_RET);
-    const t2fSSI = Math.min(Math.max(0, assietteFL - PASS_RET), 3 * PASS_RET);
-    const cotRetraiteCompFL = t1fSSI * 0.081 + t2fSSI * 0.091;
-    totalPoints += anneesFreelance * cotRetraiteCompFL / PRIX_POINT_SSI;
+    const computePointsSSI = (assietteBrute) => {
+      const assiette = assietteBrute * (1 - TNS_ABATTEMENT);
+      const t1 = Math.min(assiette, PASS_RET);
+      const t2 = Math.min(Math.max(0, assiette - PASS_RET), 3 * PASS_RET);
+      return (t1 * 0.081 + t2 * 0.091) / PRIX_POINT_SSI;
+    };
+    // Phase active (ageActuel → ageObjectif) : rémunération + dividendes TNS
+    const assietteActive = salaireBrut + divBrutsTNSAnnuel;
+    totalPoints += anneesFreelance * computePointsSSI(assietteActive);
+    // Phase "lever le pied" (ageObjectif → 67) : distributions du capital (drawdown) soumises TNS
+    const anneesLeverLePied = Math.max(0, AGE_RETRAITE - Math.max(ageObjectif, ageActuel));
+    if (drawdownBrutAnnuel > 0 && anneesLeverLePied > 0) {
+      totalPoints += anneesLeverLePied * computePointsSSI(drawdownBrutAnnuel);
+    }
     const retraiteCompMois = Math.round(totalPoints * VALEUR_POINT_SSI / 12);
     return { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois: retraiteBaseMois + retraiteCompMois };
   }
@@ -603,6 +627,9 @@ export function computeAll(params) {
   // --- Dividendes ---
   const divBrutsMax = benefDistribuable;
   let divNets, divBrutsSortis, flatTax, ratioDistrib, divCotisationsTNS = 0, divNetsMax;
+  // EURL : taux effectif de sortie TNS (remplace tauxFlatTax pour la distribution)
+  // = cotisations TNS marginales / dividendes bruts soumis TNS
+  let tauxSortieTNS = 0;
   if (isEurl) {
     // EURL : dividendes > 10% capital social → cotisations TNS (approche marginale)
     const seuilFlatTaxDiv = capitalSocial * 0.10;
@@ -633,6 +660,10 @@ export function computeAll(params) {
     divCotisationsTNS = Math.round(divResult.cotTNSDiv);
     flatTax = Math.min(divBrutsSortis, seuilFlatTaxDiv) * tauxFlatTax;
     ratioDistrib = divBrutsMax > 0 ? divBrutsSortis / divBrutsMax : 0;
+    // Taux TNS marginal effectif sur les dividendes (hors la part flat tax, négligeable avec capital 1k)
+    // Utilisé pour la fiscalité de sortie des enveloppes en EURL (remplace tauxFlatTax)
+    const partTNSCalc = Math.max(0, divBrutsSortis - seuilFlatTaxDiv);
+    tauxSortieTNS = partTNSCalc > 0 ? divResult.cotTNSDiv / partTNSCalc : 0.30;
   } else {
     // SASU : flat tax simple
     divNetsMax = divBrutsMax * (1 - tauxFlatTax);
@@ -656,6 +687,13 @@ export function computeAll(params) {
   const irFoyer = irParPart * partsFiscales;
   const votreIR = revenuImposableFoyer > 0 ? irFoyer * (revenuImposableVous / revenuImposableFoyer) : 0;
 
+  // EURL : taux de sortie pour la distribution (TNS au lieu de flat tax)
+  // En EURL, les dividendes > 10% du capital sont soumis aux cotisations TNS, pas à la flat tax.
+  // tauxSortieDistrib est utilisé partout où tauxFlatTax s'appliquait à la distribution.
+  // Mutable : en EURL, le taux est recalculé pour la phase "lever le pied" (pas de salaire sous-jacent)
+  let tauxSortieDistrib = isEurl ? tauxSortieTNS : tauxFlatTax;
+  const tauxSortieDistribPhase1 = tauxSortieDistrib;
+
   // Le seuil IS réduit (42 500 €) est partagé avec le résultat d'exploitation.
   // Les revenus de placement (forfait TME, revenus SCPI) consomment progressivement le seuil restant.
   // En phase 1 : le résultat d'exploitation consomme le seuil → peu/pas de reste pour les placements.
@@ -674,7 +712,7 @@ export function computeAll(params) {
   const ratioScpiEff = Math.max(0, 1 - ratioTreso - ratioCapi);
   const resteSASUEstime = benefDistribuable - divBrutsSortis;
   const revenuScpiEstime = (resteSASUEstime * ratioScpiEff) * rendementScpiDistrib;
-  const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxFlatTax);
+  const fiscNetteScpiEff = (1 - tauxISMoyen(revenuScpiEstime)) * (1 - tauxSortieDistrib);
   // fiscNettePerEff, fiscNetteRetraite, tmiRetraite : calculés après estimation du revenu en retraite (voir plus bas)
   let fiscNettePerEff, fiscNetteRetraite, tmiRetraite;
 
@@ -684,14 +722,14 @@ export function computeAll(params) {
   // - Au rachat : régularisation IS sur max(0, gains réels - forfaits cumulés), puis flat tax
   const forfaitTME = 1.05 * tme; // taux forfaitaire annuel appliqué aux versements nets
   const computeFiscNetteCapi = (value, basis, cumForfaits) => {
-    if (value <= 0) return 1 - tauxFlatTax;
+    if (value <= 0) return 1 - tauxSortieDistrib;
     const gain = Math.max(0, value - basis);
     // Régularisation au rachat : IS seulement sur l'excédent de gain réel vs forfaits déjà taxés
     const gainNonEncoreTaxe = Math.max(0, gain - (cumForfaits || 0));
     const isRegul = Math.min(gainNonEncoreTaxe, seuilISRestant) * tauxISReduit + Math.max(0, gainNonEncoreTaxe - seuilISRestant) * tauxISNormal;
-    // Flat tax uniquement sur le gain distribuable (gain net d'IS), pas sur le retour de capital (basis)
+    // Distribution : flat tax (SASU) ou cotisations TNS (EURL) sur le gain net d'IS
     const gainNetIS = Math.max(0, gain - isRegul);
-    return (basis + gainNetIS * (1 - tauxFlatTax)) / value;
+    return (basis + gainNetIS * (1 - tauxSortieDistrib)) / value;
   };
 
   // SCPI détenues par la SASU : à la cession, IS sur la plus-value (revalo), puis flat tax
@@ -703,8 +741,8 @@ export function computeAll(params) {
     const pvCession = Math.max(0, value - b);
     // IS sur la PV de cession (produit exceptionnel de la société)
     const isPV = Math.min(pvCession, seuilISRestant) * tauxISReduit + Math.max(0, pvCession - seuilISRestant) * tauxISNormal;
-    // Flat tax sur le tout (retour de capital = remboursement d'apport, pas imposable en flat tax)
-    return (b + (pvCession - isPV) * (1 - tauxFlatTax)) / value;
+    // Distribution : flat tax (SASU) ou cotisations TNS (EURL)
+    return (b + (pvCession - isPV) * (1 - tauxSortieDistrib)) / value;
   };
 
   // PEA > 5 ans : PS (18,6%) sur les gains uniquement, retour de capital en franchise
@@ -811,7 +849,14 @@ export function computeAll(params) {
   // --- Projection COMPLÈTE ageActuel → ageFin ---
   const annees = ageObjectif - ageActuel;
   const ageRetraite = 67;
-  const { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme });
+  // EURL : les dividendes > 10% capital sont soumis TNS → génèrent des points retraite SSI
+  const seuilFlatTaxDivRet = isEurl ? capitalSocial * 0.10 : 0;
+  const divBrutsTNSAnnuel = isEurl ? Math.max(0, divBrutsSortis - seuilFlatTaxDivRet) : 0;
+  // Premier appel : sans drawdown (estimé à 0) — sera recalculé après le drawdown pour l'EURL
+  let { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({
+    salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme,
+    divBrutsTNSAnnuel,
+  });
   // Phase 2 "lever le pied" : modèle de coûts propre
   // Pas de salaire, frais fixes réduits (compta, RC pro, CFE, banque, mutuelle, prévoyance)
   // CA missions → résultat → IS → dividendes flat tax
@@ -820,7 +865,8 @@ export function computeAll(params) {
   const fraisPhase2 = (frais.comptable || 0) + (frais.rcPro || 0) + (frais.cfe || 0) + (frais.banque || 0) + (frais.mutuelle || 0) + (frais.prevoyance || 0);
   const resultatMissions = Math.max(0, caMissions - fraisPhase2);
   const isMissions = Math.min(resultatMissions, seuilIS) * tauxISReduit + Math.max(0, resultatMissions - seuilIS) * tauxISNormal;
-  const revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxFlatTax);
+  // NB : recalculé avec tauxSortieDistribPhase2 après le drawdown (let, pas const)
+  let revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxSortieDistrib);
 
   const projection = [];
   const PLAFOND_PEA = 150000; // plafond versements PEA (CMF art. L221-30)
@@ -1031,6 +1077,31 @@ export function computeAll(params) {
   const fiscPondereeEstimee = fiscalitePonderee(projAtObjectif.capiValue, projAtObjectif.capiBase, projAtObjectif.scpiValue, projAtObjectif.scpiBase, projAtObjectif.peaValue, projAtObjectif.peaBase, per, true, 0, projAtObjectif.perBase);
   const drawdownMensuelNet = drawdownAnnuelBrut * fiscPondereeEstimee / 12;
 
+  // EURL : recalculer la retraite avec les points SSI sur les distributions en phase "lever le pied"
+  // En mode rente : retrait brut ≈ capital × taux de retrait. En mode croquer : drawdownAnnuelBrut.
+  let tauxSortieDistribPhase2 = tauxSortieDistrib;
+  if (isEurl) {
+    const drawdownBrutEstime = croquerCapital
+      ? drawdownAnnuelBrut
+      : capitalHorsPerAtObjectif * Math.max(0, rendementNetDrag - inflation - margeSecurite);
+    ({ retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({
+      salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme,
+      divBrutsTNSAnnuel,
+      drawdownBrutAnnuel: drawdownBrutEstime,
+    }));
+    // Recalculer le taux de sortie TNS pour la phase "lever le pied" :
+    // Plus de rémunération → cotisations TNS depuis zéro, taux effectif plus bas
+    const distribPhase2 = drawdownBrutEstime + Math.max(0, resultatMissions - isMissions);
+    const seuilFTPhase2 = capitalSocial * 0.10;
+    const partTNSPhase2 = Math.max(0, distribPhase2 - seuilFTPhase2);
+    if (partTNSPhase2 > 0) {
+      const tnsPhase2 = computeCotisationsTNS(partTNSPhase2);
+      tauxSortieDistribPhase2 = tnsPhase2.total / partTNSPhase2;
+    }
+    // Recalculer le revenu missions avec le taux phase 2 (utilisé pour PEA contrib et affichage)
+    revenuMissionsAnnuel = (resultatMissions - isMissions) * (1 - tauxSortieDistribPhase2);
+  }
+
   // Déflateur : convertit un montant nominal futur en pouvoir d'achat d'aujourd'hui
   const deflate = (nominal, years) => inflation > 0 ? nominal / Math.pow(1 + inflation, years) : nominal;
 
@@ -1040,6 +1111,10 @@ export function computeAll(params) {
     const age = ageActuel + y;
     const annee = 2026 + y;
     let phase = age < ageObjectif ? 1 : age < ageRetraite ? 2 : 3;
+
+    // EURL : basculer le taux de sortie TNS selon la phase
+    // Phase active : taux marginal (par-dessus le salaire), Phase 2+ : taux depuis zéro (pas de salaire)
+    if (isEurl) tauxSortieDistrib = phase >= 2 ? tauxSortieDistribPhase2 : tauxSortieDistribPhase1;
 
     if (y === 0) {
       projection.push({
@@ -1194,8 +1269,9 @@ export function computeAll(params) {
       seuilISRestant = Math.max(0, seuilIS - totalResultatSociete);
 
       // Revenu net missions phase 2 : IS au prorata du résultat total
+      // Distribution : flat tax (SASU) ou cotisations TNS (EURL)
       const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
-        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax)
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxSortieDistrib)
         : 0;
 
       // En mode croquer capital, la provision pour risque s'amortit linéairement
@@ -1292,6 +1368,9 @@ export function computeAll(params) {
     }
   }
 
+  // Restaurer le taux phase active pour les scénarios de distribution (phase 1)
+  tauxSortieDistrib = tauxSortieDistribPhase1;
+
   // --- Scénarios ratio (réutilise la même logique que le calcul principal) ---
   const paliers = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0];
   // Insérer le ratio réel de l'utilisateur s'il ne tombe pas sur un palier
@@ -1301,7 +1380,7 @@ export function computeAll(params) {
   }
   const scenariosRatio = paliers.map(r => {
     const db = benefDistribuable * r;
-    const dn = db * (1 - tauxFlatTax);
+    const dn = db * (1 - tauxSortieDistrib);
     const nn = salaireNet + dn - votreIR + frais.chequesVacances * (1 - ASSIETTE_CSG * TAUX_CSG_CRDS) - peaPerso;
     const reste = benefDistribuable - db;
     const projScenario = computeCapitalProjection({
@@ -1356,6 +1435,7 @@ export function computeAll(params) {
     areResteSASU, areContratCapi, areScpi, areReserveTreso, areMensuelNet,
     // EURL
     forme, capitalSocial, cotisationsTNSResult, divCotisationsTNS,
+    tauxSortieDistrib: tauxSortieDistribPhase1, tauxSortieDistribPhase2,
   };
 }
 
@@ -1497,7 +1577,7 @@ function runProjectionMC(ctx, annualReturns) {
     netNetMensuel,
     retraiteBaseMois, retraiteCompMois,
     fiscNetteRetraite, fiscNettePerEff, tauxConversionPer,
-    tauxFlatTax, psPea,
+    tauxFlatTax, tauxSortieDistrib, tauxSortieDistribPhase2 = tauxSortieDistrib, psPea,
     rendementScpiDistrib: rendementScpiDistribDet,
     rendementNetDrag, margeSecurite,
   } = ctx;
@@ -1648,13 +1728,13 @@ function runProjectionMC(ctx, annualReturns) {
       const totalVal = cumCapi + cumScpi + cumPea + cumPer;
       const totalBase = cumCapiBase + cumScpiBase + cumPeaBase + cumPerBase;
       const ratioGains = totalVal > 0 ? Math.max(0, totalVal - totalBase) / totalVal : 0;
-      const fiscEst = 1 - ratioGains * tauxFlatTax; // approximation conservatrice
+      const fiscEst = 1 - ratioGains * tauxSortieDistribPhase2; // approximation conservatrice
       const drawdownNet = actualWithdrawal * fiscEst;
       const retraiteBrut = phase === 3
         ? (retraiteBaseMois + retraiteCompMois * sousIndexationArrco) : 0;
       const retraiteNet = retraiteBrut * (fiscNetteRetraite || 1);
       const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
-        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax) / 12
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxSortieDistribPhase2) / 12
         : 0;
       revenus[y] = drawdownNet * deflate / 12 + revenuMissionsNet * deflate + retraiteNet;
     } else {
@@ -1664,7 +1744,7 @@ function runProjectionMC(ctx, annualReturns) {
       const totalVal = cumCapi + cumScpi + cumPea;
       const totalBase = cumCapiBase + cumScpiBase + cumPeaBase;
       const ratioGains = totalVal > 0 ? Math.max(0, totalVal - totalBase) / totalVal : 0;
-      const fiscEst = 1 - ratioGains * tauxFlatTax;
+      const fiscEst = 1 - ratioGains * tauxSortieDistribPhase2;
       const revenuPassif = totalHorsPer * tauxRetrait * fiscEst / 12;
       const perRente = (!croquerCapital && perRenteAnnuelleBrute > 0)
         ? perRenteAnnuelleBrute * (fiscNettePerEff || 1) / 12 : 0;
@@ -1672,7 +1752,7 @@ function runProjectionMC(ctx, annualReturns) {
         ? (retraiteBaseMois + retraiteCompMois * sousIndexationArrco) : 0;
       const retraiteNet = retraiteBrut * (fiscNetteRetraite || 1);
       const revenuMissionsNet = (phase === 2 && resultatMissionsY > 0 && totalResultatSociete > 0)
-        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxFlatTax) / 12
+        ? (resultatMissionsY - isTotalSociete * (resultatMissionsY / totalResultatSociete)) * (1 - tauxSortieDistribPhase2) / 12
         : 0;
       revenus[y] = revenuPassif * deflate + perRente * deflate + retraiteNet + revenuMissionsNet * deflate;
     }
@@ -1736,6 +1816,7 @@ export function computeMonteCarloProjection(params, det, {
     fiscNettePerEff: det.fiscNettePerEff,
     tauxConversionPer: params.tauxConversionPer || DEFAULTS.tauxConversionPer,
     tauxFlatTax: params.tauxFlatTax || DEFAULTS.tauxFlatTax,
+    tauxSortieDistrib: det.tauxSortieDistrib, tauxSortieDistribPhase2: det.tauxSortieDistribPhase2,
     psPea: params.psPea || DEFAULTS.psPea,
     rendementScpiDistrib: rendementScpi * partDistribScpi,
     rendementNetDrag: 0, // calculé ci-dessous
