@@ -47,7 +47,7 @@ function AiHelperBanner() {
     });
   };
   return (
-    <div style={{ marginBottom: 16 }}>
+    <aside style={{ marginBottom: 16 }}>
       <div onClick={() => setOpen(!open)} style={{
         background: '#edf2f7', border: '1px solid #e2e8f0', borderRadius: 10,
         padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
@@ -89,7 +89,7 @@ function AiHelperBanner() {
           </ol>
         </div>
       )}
-    </div>
+    </aside>
   );
 }
 
@@ -279,39 +279,39 @@ function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
 
 function Card({ title, subtitle, children, accent = "#2563eb" }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '14px 12px', marginBottom: 12,
+    <section style={{ background: '#fff', borderRadius: 12, padding: '14px 12px', marginBottom: 12,
       borderLeft: `4px solid ${accent}`, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
       <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 700, color: '#1a365d',
         textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>{title}</h3>
       {subtitle && <p style={{ margin: '0 0 14px 0', fontSize: 12, color: '#718096', fontStyle: 'italic' }}>{subtitle}</p>}
       {!subtitle && <div style={{ marginBottom: 12 }} />}
       {children}
-    </div>
+    </section>
   );
 }
 
 function Stat({ label, value, sub, color = "#1a365d", big = false }) {
   return (
-    <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-      <div style={{ fontSize: big ? 28 : 22, fontWeight: 800, color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.2 }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#718096', marginTop: 4, fontFamily: "'DM Sans', sans-serif" }}>{label}</div>
-      {sub && <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{sub}</div>}
-    </div>
+    <x-stat style={{ display: 'block', textAlign: 'center', padding: '8px 4px' }}>
+      <x-amount style={{ display: 'block', fontSize: big ? 28 : 22, fontWeight: 800, color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.2 }}>{value}</x-amount>
+      <x-label style={{ display: 'block', fontSize: 12, color: '#718096', marginTop: 4, fontFamily: "'DM Sans', sans-serif" }}>{label}</x-label>
+      {sub && <x-note style={{ display: 'block', fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{sub}</x-note>}
+    </x-stat>
   );
 }
 
 function Row({ label, value, bold, highlight, sub }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0',
+    <x-row style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0',
       borderBottom: '1px solid #edf2f7', background: highlight ? '#f0fff4' : 'transparent',
       paddingLeft: highlight ? 8 : 0, paddingRight: highlight ? 8 : 0, borderRadius: highlight ? 6 : 0 }}>
-      <span style={{ fontSize: 13, color: '#4a5568', fontWeight: bold ? 700 : 400, fontFamily: "'DM Sans', sans-serif" }}>{label}</span>
-      <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: 13, fontWeight: bold ? 700 : 400, color: highlight ? '#22543d' : '#1a365d',
-          fontFamily: "'JetBrains Mono', monospace" }}>{value}</span>
-        {sub && <div style={{ fontSize: 10, color: '#a0aec0' }}>{sub}</div>}
-      </div>
-    </div>
+      <x-label style={{ fontSize: 13, color: '#4a5568', fontWeight: bold ? 700 : 400, fontFamily: "'DM Sans', sans-serif" }}>{label}</x-label>
+      <x-value style={{ display: 'block', textAlign: 'right' }}>
+        <x-amount style={{ fontSize: 13, fontWeight: bold ? 700 : 400, color: highlight ? '#22543d' : '#1a365d',
+          fontFamily: "'JetBrains Mono', monospace" }}>{value}</x-amount>
+        {sub && <x-note style={{ display: 'block', fontSize: 10, color: '#a0aec0' }}>{sub}</x-note>}
+      </x-value>
+    </x-row>
   );
 }
 
@@ -483,7 +483,7 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet" />
       <style>{`input.no-spin::-webkit-outer-spin-button,input.no-spin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input.no-spin{-moz-appearance:textfield}`}</style>
 
-      <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '14px 0', marginBottom: 0 }}>
+      <header style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2563eb 100%)', padding: '14px 0', marginBottom: 0 }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
             Simulateur Freelance
@@ -509,10 +509,10 @@ export default function App() {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Barre profil : forme juridique + âge */}
-      <div style={{ background: '#edf2f7', borderBottom: '1px solid #e2e8f0', padding: '10px 0', marginBottom: 20 }}>
+      <nav style={{ background: '#edf2f7', borderBottom: '1px solid #e2e8f0', padding: '10px 0', marginBottom: 20 }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#4a5568' }}>Forme juridique</span>
@@ -539,9 +539,9 @@ export default function App() {
             <span style={{ fontSize: 13, color: '#4a5568' }}>ans</span>
           </div>
         </div>
-      </div>
+      </nav>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 12px 40px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '0 12px 40px' }}>
         <AiHelperBanner />
 
         {/* ÉTAPE 1 : CHIFFRE D'AFFAIRES */}
@@ -549,15 +549,15 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'end' }}>
             <Slider label="TJM HT" value={tjm} onChange={setTjm} min={400} max={2500} step={50} />
             <Slider label="Jours facturés/an" value={jours} onChange={setJours} min={150} max={230} step={5} format="num" suffix=" j" />
-            <div style={{ textAlign: 'center', padding: '8px 0' }}>
-              <div style={{ fontSize: 12, color: '#718096', marginBottom: 4 }}>CA HT annuel</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT)}</div>
-            </div>
+            <x-stat style={{ display: 'block', textAlign: 'center', padding: '8px 0' }}>
+              <x-label style={{ display: 'block', fontSize: 12, color: '#718096', marginBottom: 4 }}>CA HT annuel</x-label>
+              <x-amount style={{ display: 'block', fontSize: 28, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT)}</x-amount>
+            </x-stat>
           </div>
         </Card>
 
         {/* ÉTAPE 2 : CHARGES FIXES */}
-        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <x-step-arrow style={{ display: 'block', textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</x-step-arrow>
         <Card title="2. Charges fixes d'exploitation" subtitle="Ce que la société paie quoi qu'il arrive — non lié à votre rémunération" accent="#e53e3e">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 12 }}>
             {Object.entries(frais).filter(([k]) => k !== 'per').map(([k, v]) => {
@@ -592,75 +592,75 @@ export default function App() {
               );
             })}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: '#fff5f5', borderRadius: 8, border: '1px solid #fc8181' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#9b2c2c' }}>Total charges fixes</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#9b2c2c', fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(totalFraisHorsPer)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', marginTop: 8, background: '#ebf5ff', borderRadius: 8, border: '1px solid #90cdf4' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb' }}>Disponible après charges fixes</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT - totalFraisHorsPer)}</span>
-          </div>
+          <x-total style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: '#fff5f5', borderRadius: 8, border: '1px solid #fc8181' }}>
+            <x-label style={{ fontSize: 13, fontWeight: 600, color: '#9b2c2c' }}>Total charges fixes</x-label>
+            <x-amount style={{ fontSize: 18, fontWeight: 800, color: '#9b2c2c', fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(totalFraisHorsPer)}</x-amount>
+          </x-total>
+          <x-total style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', marginTop: 8, background: '#ebf5ff', borderRadius: 8, border: '1px solid #90cdf4' }}>
+            <x-label style={{ fontSize: 13, fontWeight: 600, color: '#2563eb' }}>Disponible après charges fixes</x-label>
+            <x-amount style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', fontFamily: "'JetBrains Mono', monospace" }}>{fmt(caHT - totalFraisHorsPer)}</x-amount>
+          </x-total>
         </Card>
 
         {/* ÉTAPE 3 : RÉPARTITION */}
-        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <x-step-arrow style={{ display: 'block', textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</x-step-arrow>
         <Card title="3. Répartition de la rémunération" subtitle="Comment vous répartissez entre salaire, dividendes et ce qui reste dans la société" accent="#38a169">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {/* Colonne salaire */}
-            <div style={{ padding: 12, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <x-panel style={{ display: 'block', padding: 12, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {isEurl ? 'Rémunération gérant' : 'Salaire président'}
-              </div>
+              </x-panel-title>
               <Slider label={isEurl ? "Rémunération annuelle" : "Salaire brut annuel"} value={salaireBrutEffectif} onChange={setSalaireBrut} min={30000} max={maxSalaireBrut} step={5000} />
               {isEurl ? (
                 <>
-                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                    <span>Cotisations TNS ({fmtPct(r.cotisationsTNSResult?.tauxEffectif || 0)})</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.cotisationsTNSResult?.total || 0)}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                    <span>Net gérant ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
-                  </div>
+                  <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <x-label>Cotisations TNS ({fmtPct(r.cotisationsTNSResult?.tauxEffectif || 0)})</x-label>
+                    <x-amount style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.cotisationsTNSResult?.total || 0)}</x-amount>
+                  </x-detail>
+                  <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                    <x-label>Net gérant ({fmt(Math.round(r.salaireNet / 12))}/mois)</x-label>
+                    <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</x-amount>
+                  </x-detail>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                    <span>Superbrut (brut + {fmtPct(r.chargesPatronales / salaireBrutEffectif)} patronales)</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.superbrut)}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                    <span>Net perso ({fmt(Math.round(r.salaireNet / 12))}/mois)</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</span>
-                  </div>
+                  <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <x-label>Superbrut (brut + {fmtPct(r.chargesPatronales / salaireBrutEffectif)} patronales)</x-label>
+                    <x-amount style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>- {fmt(r.superbrut)}</x-amount>
+                  </x-detail>
+                  <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                    <x-label>Net perso ({fmt(Math.round(r.salaireNet / 12))}/mois)</x-label>
+                    <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.salaireNet)}</x-amount>
+                  </x-detail>
                 </>
               )}
-            </div>
+            </x-panel>
             {/* Colonne PER */}
-            <div style={{ padding: 12, background: '#faf5ff', borderRadius: 8, border: '1px solid #d6bcfa' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#553c9a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PER — Plan d'Épargne Retraite</div>
+            <x-panel style={{ display: 'block', padding: 12, background: '#faf5ff', borderRadius: 8, border: '1px solid #d6bcfa' }}>
+              <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#553c9a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PER — Plan d'Épargne Retraite</x-panel-title>
               <Slider label="Versement annuel PER" value={perEffectif} onChange={setPer} min={0} max={maxPer} step={500} />
-              <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 0, fontStyle: 'italic' }}>
+              <x-note style={{ display: 'block', fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 0, fontStyle: 'italic' }}>
                 Versé par la {isEurl ? 'société' : 'SASU'}, déduit du résultat (réduit l'IS) — bloqué jusqu'à 64 ans
-              </div>
-            </div>
+              </x-note>
+            </x-panel>
           </div>
 
           {/* IS + bénéfice */}
-          <div style={{ marginTop: 16, padding: 12, background: '#fffff0', borderRadius: 8, border: '1px solid #fefcbf' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#975a16', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résultat & IS</div>
-            <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span>Résultat avant IS</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(r.resultatAvantIS)}</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span>IS (taux effectif {fmtPct(r.tauxEffectifIS)})</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.isTotal)}</span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#975a16', display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #fefcbf' }}>
-              <span>Bénéfice distribuable</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</span>
-            </div>
+          <x-panel style={{ display: 'block', marginTop: 16, padding: 12, background: '#fffff0', borderRadius: 8, border: '1px solid #fefcbf' }}>
+            <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#975a16', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résultat & IS</x-panel-title>
+            <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <x-label>Résultat avant IS</x-label>
+              <x-amount style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(r.resultatAvantIS)}</x-amount>
+            </x-detail>
+            <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <x-label>IS (taux effectif {fmtPct(r.tauxEffectifIS)})</x-label>
+              <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.isTotal)}</x-amount>
+            </x-detail>
+            <x-total style={{ fontSize: 13, fontWeight: 700, color: '#975a16', display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #fefcbf' }}>
+              <x-label>Bénéfice distribuable</x-label>
+              <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</x-amount>
+            </x-total>
             <details style={{ marginTop: 8 }}>
               <summary style={{ fontSize: 11, color: '#975a16', cursor: 'pointer', fontWeight: 600 }}>Détail du compte de résultat</summary>
               <div style={{ marginTop: 8, padding: '8px 0' }}>
@@ -672,41 +672,41 @@ export default function App() {
                 <Row label="Bénéfice distribuable" value={fmt(r.benefDistribuable)} bold highlight sub={`montant max que la ${isEurl ? 'société' : 'SASU'} peut vous verser en dividendes`} />
               </div>
             </details>
-          </div>
+          </x-panel>
 
           {/* Répartition du bénéfice */}
-          <div style={{ marginTop: 16, padding: 12, background: '#f0fff4', borderRadius: 8, border: '1px solid #9ae6b4' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</div>
-            <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 12, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-              <span>Bénéfice distribuable : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</b></span>
-              <span>→ {isEurl ? 'nets max (flat tax + TNS)' : 'après flat tax (31,4%)'} : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b></span>
-            </div>
+          <x-panel style={{ display: 'block', marginTop: 16, padding: 12, background: '#f0fff4', borderRadius: 8, border: '1px solid #9ae6b4' }}>
+            <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Répartition du bénéfice</x-panel-title>
+            <x-detail style={{ fontSize: 11, color: '#4a5568', marginBottom: 12, padding: '6px 8px', background: '#e6fffa', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+              <x-label>Bénéfice distribuable : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.benefDistribuable)}</b></x-label>
+              <x-label>→ {isEurl ? 'nets max (flat tax + TNS)' : 'après flat tax (31,4%)'} : <b style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(maxDivNets)}</b></x-label>
+            </x-detail>
             {isEurl && (
-              <div style={{ fontSize: 11, color: '#9b2c2c', marginBottom: 8, padding: '6px 8px', background: '#fff5f5', borderRadius: 4, border: '1px solid #fc8181' }}>
+              <x-warning style={{ display: 'block', fontSize: 11, color: '#9b2c2c', marginBottom: 8, padding: '6px 8px', background: '#fff5f5', borderRadius: 4, border: '1px solid #fc8181' }}>
                 ⚠ EURL : dividendes {'>'} 10% du capital social ({fmt(capitalSocial)}) → cotisations TNS (~45%) au lieu de flat tax 31,4%
-              </div>
+              </x-warning>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            <x-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
               {/* Colonne gauche : Dividendes */}
-              <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dividendes — dans votre poche</div>
+              <x-panel style={{ display: 'block', padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
+                <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#22543d', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dividendes — dans votre poche</x-panel-title>
                 <Slider label="Dividendes nets annuels (après flat tax)" value={divNetsEffectif} onChange={setDivNetsVoulus} min={0} max={maxDivNets} step={1000} />
-                <div style={{ fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+                <x-amount style={{ display: 'block', fontSize: 11, color: '#718096', marginTop: -8, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
                   {fmt(Math.round(divNetsEffectif / 12))}/mois sur votre compte
-                </div>
-                <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Flat tax prélevée</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.flatTax)}</span>
-                </div>
-                <div style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                  <span>Dividendes bruts sortis</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.divBrutsSortis)}</span>
-                </div>
-              </div>
+                </x-amount>
+                <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between' }}>
+                  <x-label>Flat tax prélevée</x-label>
+                  <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>- {fmt(r.flatTax)}</x-amount>
+                </x-detail>
+                <x-detail style={{ fontSize: 11, color: '#718096', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                  <x-label>Dividendes bruts sortis</x-label>
+                  <x-amount style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmt(r.divBrutsSortis)}</x-amount>
+                </x-detail>
+              </x-panel>
               {/* Colonne droite : Reste en SASU */}
-              <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en {isEurl ? 'EURL' : 'SASU'} — {fmt(r.resteSASU)}</div>
-                <div style={{ fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées du graphique pour répartir</div>
+              <x-panel style={{ display: 'block', padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #c6f6d5' }}>
+                <x-panel-title style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1a365d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reste en {isEurl ? 'EURL' : 'SASU'} — {fmt(r.resteSASU)}</x-panel-title>
+                <x-note style={{ display: 'block', fontSize: 11, color: '#718096', marginBottom: 8 }}>Glissez les poignées du graphique pour répartir</x-note>
                 <PieSlider
                   v1={ratioTreso} v2={ratioCapi}
                   onChange={(t, c) => { setRatioTreso(t); setRatioCapi(c); }}
@@ -714,9 +714,9 @@ export default function App() {
                   color1="#1a365d" color2="#2563eb" color3="#38a169"
                   amounts={[fmt(r.reserveTreso), fmt(r.contratCapi), fmt(r.scpi)]}
                 />
-              </div>
-            </div>
-          </div>
+              </x-panel>
+            </x-grid>
+          </x-panel>
         </Card>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 16, marginBottom: 16 }}>
@@ -768,7 +768,7 @@ export default function App() {
         </div>
 
         {/* HEADLINE STATS */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, marginBottom: 24,
+        <section style={{ background: '#fff', borderRadius: 12, padding: 20, marginBottom: 24,
           boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
           <Stat label="Net net mensuel — à consommer" value={fmt(r.netNetMensuel)} color="#22543d" big />
@@ -776,10 +776,10 @@ export default function App() {
           <Stat label="Épargne auto / an" value={fmtK(r.epargneTotale)} sub="placé sans y toucher" color="#2563eb" />
           <Stat label={`Patrimoine à ${ageObjectif} ans`} value={fmtK(age50Data.total)} sub="capital accumulé" color="#9b2c2c" />
           <Stat label="Revenu passif net / mois" value={fmt(age50Data.revenuPassifMois)} sub={croquerCapital ? `consommation capital → ${ageFin} ans` : "rente perpétuelle prudente"} />
-        </div>
+        </section>
 
         {/* ÉTAPE 4 : PROJECTION */}
-        <div style={{ textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</div>
+        <x-step-arrow style={{ display: 'block', textAlign: 'center', margin: '4px 0', color: '#cbd5e0', fontSize: 20 }}>▼</x-step-arrow>
         <Card title="4. Projection patrimoniale" subtitle="Paramètres de votre stratégie long terme" accent="#6b46c1">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             <Slider label="Rendement contrat capi" value={rendementCapi} onChange={setRendementCapi} min={0.02} max={0.10} step={0.005} format="pct" note="Net de frais assureur — FID actions" />
@@ -1109,7 +1109,7 @@ export default function App() {
           </div>
         </Card>
 
-        <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', marginTop: 24,
+        <footer style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', marginTop: 24,
           borderLeft: '4px solid #a0aec0', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 700, color: '#1a365d',
             textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'DM Sans', sans-serif" }}>Sources réglementaires (2026)</h3>
@@ -1125,13 +1125,13 @@ export default function App() {
             <div><strong>[9]</strong> Contrat de capitalisation luxembourgeois & super-privilège</div>
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>Détail complet des sources, textes de loi et liens Légifrance : <a href="https://github.com/allan-simon/freelance-simulator/blob/master/skills/sasu/reglementation-2026.md" target="_blank" rel="noopener noreferrer"><strong>reglementation-2026.md</strong></a></div>
           </div>
-        </div>
+        </footer>
 
-        <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 11, marginTop: 16, fontStyle: 'italic' }}>
+        <p style={{ textAlign: 'center', color: '#a0aec0', fontSize: 11, marginTop: 16, fontStyle: 'italic' }}>
           Simulation indicative — consultez un expert-comptable et un avocat fiscaliste pour valider votre montage.
           <br />Barème IR 2026 · Taux IS 2026 · Tous les calculs sont dans le code source, vérifiables.
-        </div>
-      </div>
+        </p>
+      </main>
     </div>
   );
 }
