@@ -249,11 +249,16 @@ function PieSlider({ v1, v2, onChange, label1, label2, label3, color1 = '#1a365d
             style={{ fontSize: 10, fontWeight: 700, fill: color2, pointerEvents: 'none' }}>{pct2}%</text>}
           {pct3 >= 10 && <text x={lx3} y={ly3} textAnchor="middle" dominantBaseline="central"
             style={{ fontSize: 10, fontWeight: 700, fill: color3, pointerEvents: 'none' }}>{pct3}%</text>}
-          <circle cx={hx0} cy={hy0} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
+          {/* Visible handles */}
+          <circle cx={hx0} cy={hy0} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle} pointerEvents="none" />
+          <circle cx={hx1} cy={hy1} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle} pointerEvents="none" />
+          <circle cx={hx2} cy={hy2} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle} pointerEvents="none" />
+          {/* Larger invisible hit targets for mobile */}
+          <circle cx={hx0} cy={hy0} r={22} fill="transparent" style={hStyle}
             onMouseDown={onDown('h0')} onTouchStart={onDown('h0')} />
-          <circle cx={hx1} cy={hy1} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
+          <circle cx={hx1} cy={hy1} r={22} fill="transparent" style={hStyle}
             onMouseDown={onDown('h1')} onTouchStart={onDown('h1')} />
-          <circle cx={hx2} cy={hy2} r={8} fill="#fff" stroke="#4a5568" strokeWidth={2} style={hStyle}
+          <circle cx={hx2} cy={hy2} r={22} fill="transparent" style={hStyle}
             onMouseDown={onDown('h2')} onTouchStart={onDown('h2')} />
         </svg>
       </div>
