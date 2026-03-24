@@ -53,6 +53,7 @@ const rendementScpi = args.rendementScpi !== undefined ? args.rendementScpi : (r
 const rendementPea  = args.rendementPea  !== undefined ? args.rendementPea  : (rendementFallback ?? DEFAULTS.rendementPea);
 const rendementPer  = args.rendementPer  !== undefined ? args.rendementPer  : (rendementFallback ?? DEFAULTS.rendementPer);
 const ageObjectif = pick('ageObjectif');
+const ageRetraite = pick('ageRetraite');
 const joursLeverLePied = pick('joursLeverLePied');
 const croquerCapital = pick('croquerCapital');
 const ageFin = pick('ageFin');
@@ -78,7 +79,7 @@ function buildParams() {
       tauxFlatTax: DEFAULTS.tauxFlatTax, abattementIR: DEFAULTS.abattementIR,
       revenuConjoint: DEFAULTS.revenuConjoint, partsFiscales,
       frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer,
-      ageActuel, ageObjectif, peaPerso,
+      ageActuel, ageObjectif, ageRetraite, peaPerso,
       croquerCapital, ageFin, joursLeverLePied, ratioTreso, ratioCapi, inflation,
       anneesAre, salaireBrutCDI, forme, capitalSocial
     },
@@ -149,6 +150,7 @@ function step3() {
   console.log(`  --rendementPer     ${RANGES.rendementPer.min}..${RANGES.rendementPer.max} (PER)`);
   console.log(`  --rendement        (fallback unique pour les 4 enveloppes)`);
   console.log(`  --ageObjectif      ${RANGES.ageObjectif.min}..${RANGES.ageObjectif.max}`);
+  console.log(`  --ageRetraite      ${RANGES.ageRetraite.min}..${RANGES.ageRetraite.max} (âge départ retraite)`);
   console.log(`  --joursLeverLePied ${RANGES.joursLeverLePied.min}..${RANGES.joursLeverLePied.max}`);
   console.log(`  --croquerCapital   true|false`);
   console.log(`  --ageFin           ${RANGES.ageFin.min}..${RANGES.ageFin.max} (si croquerCapital)`);
@@ -192,7 +194,7 @@ if (args.json) {
   console.log('  node cli.js --step1 [--tjm N] [--jours N]');
   console.log('  node cli.js --step2 [--tjm N] [--jours N]');
   console.log('  node cli.js --step3 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N]');
-  console.log('  node cli.js --step4 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N] [--rendementCapi N] [--rendementScpi N] [--rendementPea N] [--rendementPer N] [--ageObjectif N] [--joursLeverLePied N] [--croquerCapital true|false] [--ageFin N]');
+  console.log('  node cli.js --step4 [--tjm N] [--jours N] [--salaireBrut N] [--per N] [--divNetsVoulus N] [--rendementCapi N] [--rendementScpi N] [--rendementPea N] [--rendementPer N] [--ageObjectif N] [--ageRetraite N] [--joursLeverLePied N] [--croquerCapital true|false] [--ageFin N]');
   console.log('  node cli.js --all   (toutes les steps avec les défauts)');
   console.log('  node cli.js --json  (sortie JSON complète pour traitement programmatique)');
   console.log();

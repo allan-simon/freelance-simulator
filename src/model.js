@@ -22,6 +22,7 @@ export const DEFAULTS = {
   fraisEntreeScpi: 0.10,
   rendementPea:  0.07,  // PEA, ETF actions — net de TER (~0,2%) et frais courtier
   rendementPer:  0.05,  // PER, allocation mixte/défensive — net de frais assureur (~0,5%, PER en ligne)
+  ageRetraite: 67,
   ageObjectif: 50,
   joursLeverLePied: 50,
   croquerCapital: false,
@@ -300,6 +301,7 @@ export const RANGES = {
   rendementScpi: { min: 0.02, max: 0.08, step: 0.005 },
   rendementPea:  { min: 0.02, max: 0.12, step: 0.005 },
   rendementPer:  { min: 0.02, max: 0.08, step: 0.005 },
+  ageRetraite: { min: 62, max: 70, step: 1 },
   ageObjectif: { min: 42, max: 60, step: 1 },
   joursLeverLePied: { min: 0, max: 150, step: 10 },
   ageFin: { min: 70, max: 95, step: 1 },
@@ -402,9 +404,9 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 }
 
 // Estimation retraite réaliste (base régime général + complémentaire AGIRC-ARRCO)
-// Hypothèses : début carrière à 22 ans, taux plein à 67 ans
+// Hypothèses : début carrière à 22 ans, taux plein à ageRetraite (défaut 67 ans)
 // En EURL : les dividendes > 10% capital sont soumis aux cotisations TNS (dont retraite SSI),
-// générant des points supplémentaires en phase active ET en phase "lever le pied" (jusqu'à 67 ans).
+// générant des points supplémentaires en phase active ET en phase "lever le pied" (jusqu'à ageRetraite).
 // Sources :
 //   - Pension base : SAM × 50% × prorata — service-public.fr/particuliers/vosdroits/F21552
 //   - SAM (25 meilleures années plafonnées PASS) — legislation.cnav.fr
@@ -414,13 +416,14 @@ export function computeCapitalProjection({ contratCapi, scpi, peaPerso, per, ren
 //     érodant le rendement de la complémentaire. Le modèle est légèrement optimiste.
 //   - Trimestres requis génération ~1990 : 172 (43 ans) — service-public.fr/particuliers/vosdroits/F35063
 export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme = 'sasu',
+  ageRetraite = DEFAULTS.ageRetraite,
   // EURL : assiette dividendes soumise aux cotisations TNS (div bruts - seuil 10% capital)
   divBrutsTNSAnnuel = 0,
   // EURL : distribution annuelle en phase "lever le pied" (drawdown brut avant TNS)
   drawdownBrutAnnuel = 0,
 }) {
   const AGE_DEBUT = 22;
-  const AGE_RETRAITE = 67;
+  const AGE_RETRAITE = ageRetraite;
   const TRIMESTRES_REQUIS = 172; // génération ~1990
   const PASS_RET = PASS; // plafond annuel sécu
 
@@ -504,7 +507,7 @@ export function computeRetraite({ salaireBrutCDI, salaireBrut, ageActuel, ageObj
     // Phase active (ageActuel → ageObjectif) : rémunération + dividendes TNS
     const assietteActive = salaireBrut + divBrutsTNSAnnuel;
     totalPoints += anneesFreelance * computePointsSSI(assietteActive);
-    // Phase "lever le pied" (ageObjectif → 67) : distributions du capital (drawdown) soumises TNS
+    // Phase "lever le pied" (ageObjectif → ageRetraite) : distributions du capital (drawdown) soumises TNS
     const anneesLeverLePied = Math.max(0, AGE_RETRAITE - Math.max(ageObjectif, ageActuel));
     if (drawdownBrutAnnuel > 0 && anneesLeverLePied > 0) {
       totalPoints += anneesLeverLePied * computePointsSSI(drawdownBrutAnnuel);
@@ -562,6 +565,7 @@ export function computeAll(params) {
     fraisEntreeScpi = DEFAULTS.fraisEntreeScpi,
     margeSecurite = DEFAULTS.margeSecurite,
     frais, rendement: rendementGlobal, ageActuel, ageObjectif,
+    ageRetraite = DEFAULTS.ageRetraite,
     peaPerso = DEFAULTS.peaPerso,
     croquerCapital = false, ageFin = 80, joursLeverLePied = 50, tauxConversionPer = 0.035, tme = 0.0345,
     ratioTreso = 0.15, ratioCapi = 0.65,
@@ -848,13 +852,12 @@ export function computeAll(params) {
 
   // --- Projection COMPLÈTE ageActuel → ageFin ---
   const annees = ageObjectif - ageActuel;
-  const ageRetraite = 67;
   // EURL : les dividendes > 10% capital sont soumis TNS → génèrent des points retraite SSI
   const seuilFlatTaxDivRet = isEurl ? capitalSocial * 0.10 : 0;
   const divBrutsTNSAnnuel = isEurl ? Math.max(0, divBrutsSortis - seuilFlatTaxDivRet) : 0;
   // Premier appel : sans drawdown (estimé à 0) — sera recalculé après le drawdown pour l'EURL
   let { retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({
-    salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme,
+    salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, ageRetraite, forme,
     divBrutsTNSAnnuel,
   });
   // Phase 2 "lever le pied" : modèle de coûts propre
@@ -1085,7 +1088,7 @@ export function computeAll(params) {
       ? drawdownAnnuelBrut
       : capitalHorsPerAtObjectif * Math.max(0, rendementNetDrag - inflation - margeSecurite);
     ({ retraiteBaseMois, retraiteCompMois, retraiteTotaleMois } = computeRetraite({
-      salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, forme,
+      salaireBrutCDI, salaireBrut, ageActuel, ageObjectif, ageRetraite, forme,
       divBrutsTNSAnnuel,
       drawdownBrutAnnuel: drawdownBrutEstime,
     }));
@@ -1789,7 +1792,7 @@ export function computeMonteCarloProjection(params, det, {
     ageActuel: params.ageActuel || DEFAULTS.ageActuel,
     ageObjectif: params.ageObjectif || DEFAULTS.ageObjectif,
     ageFin: params.ageFin || DEFAULTS.ageFin,
-    ageRetraite: 67,
+    ageRetraite: params.ageRetraite || DEFAULTS.ageRetraite,
     inflation: det.inflation,
     contratCapi: det.contratCapi,
     scpiNet: det.scpi * (1 - fraisEntreeScpi),
@@ -1988,7 +1991,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
     L.push('  Age  Phase            Patrimoine     Rev.passif/m  Missions/m  Retraite/m  Total/m');
     L.push('  ' + '─'.repeat(90));
   }
-  const keyAges = new Set([ageActuel, ageObjectif, ageObjectif + 1, 64, 67, 75, ageFin]);
+  const keyAges = new Set([ageActuel, ageObjectif, ageObjectif + 1, 64, r.ageRetraite, 75, ageFin]);
   if (r.anneesAre > 0) keyAges.add(ageActuel + r.anneesAre); // fin de la phase ARE
   for (const p of r.projection) {
     if (keyAges.has(p.age)) {
@@ -2020,7 +2023,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   // Jalons
   const age50 = r.projection.find(p => p.age === ageObjectif);
   const age64 = r.projection.find(p => p.age === 64);
-  const age67 = r.projection.find(p => p.age === 67);
+  const age67 = r.projection.find(p => p.age === r.ageRetraite);
   const age75 = r.projection.find(p => p.age === 75);
   L.push('  Jalons de vie (€ 2026) :');
   if (r.anneesAre > 0) {
@@ -2031,7 +2034,7 @@ export function formatReport({ tjm, jours, salaireBrut, per, divNetsVoulus, rend
   }
   if (age50) L.push(`    ${ageObjectif} ans (lever pied)  : ${fmt(age50.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age50.totalReel)}`);
   if (age64) L.push(`    64 ans (PER débloqué) : ${fmt(age64.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age64.totalReel)}`);
-  if (age67) L.push(`    67 ans (retraite)     : ${fmt(age67.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age67.totalReel)}`);
+  if (age67) L.push(`    ${r.ageRetraite} ans (retraite)     : ${fmt(age67.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age67.totalReel)}`);
   if (age75) L.push(`    75 ans                : ${fmt(age75.revenuTotalMoisReel)}/mois | patrimoine ${fmt(age75.totalReel)}`);
 
   return L.join('\n');

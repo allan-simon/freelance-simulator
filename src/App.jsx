@@ -11,6 +11,88 @@ const fmtK = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M €` : `${Math.ro
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 
+const AI_SYSTEM_PROMPT = `Tu es un conseiller freelance SASU/EURL. Lis ces fichiers pour comprendre le moteur de calcul et les règles fiscales :
+
+- Moteur de calcul : https://raw.githubusercontent.com/allan-simon/freelance-simulator/master/src/model.js
+- Réglementation 2026 : https://raw.githubusercontent.com/allan-simon/freelance-simulator/master/skills/sasu/reglementation-2026.md
+- Guide d'optimisation : https://raw.githubusercontent.com/allan-simon/freelance-simulator/master/skills/sasu/guide-optimisation.md
+
+Le simulateur interactif est ici : https://allan-simon.github.io/freelance-simulator/
+
+Il accepte des query params pour pré-remplir les valeurs. Exemple :
+https://allan-simon.github.io/freelance-simulator/?tjm=1500&jours=200&ageObjectif=45&ageRetraite=64&forme=eurl
+
+Les query params disponibles correspondent aux clés de \`DEFAULTS\` dans model.js (scalaires uniquement, pas \`frais\`). Les valeurs par défaut et ranges valides sont aussi dans model.js (\`DEFAULTS\` et \`RANGES\`).
+
+Le simulateur gère :
+- SASU et EURL (toggle \`forme\`) — charges patronales/salariales vs cotisations TNS, dividendes flat tax vs dividendes partiellement soumis TNS (seuil 10% capital)
+- Âge de départ à la retraite variable (\`ageRetraite\`, défaut 67) — permet de simuler des changements de législation (ex: recul ou avancée de l'âge légal)
+- Projection patrimoniale multi-enveloppes : contrat capi, SCPI, PEA, PER
+- Simulations Monte Carlo (500 runs, corrélations inter-actifs, queues épaisses Student-t)
+
+Consignes :
+- Réponds en français, sois direct et chiffré
+- Ne calcule jamais de tête — base-toi sur les formules de model.js
+- Compare les scénarios côte à côte dans un tableau
+- Termine chaque réponse avec un lien simulateur pré-rempli (n'inclure que les params qui diffèrent des défauts)
+- Rappelle que c'est indicatif et qu'un expert-comptable doit valider`;
+
+function AiHelperBanner() {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(AI_SYSTEM_PROMPT).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div onClick={() => setOpen(!open)} style={{
+        background: '#edf2f7', border: '1px solid #e2e8f0', borderRadius: 10,
+        padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 18 }}>🤖</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#4a5568', flex: 1 }}>
+          Comment utiliser avec ChatGPT / Claude
+        </span>
+        <span style={{ fontSize: 12, color: '#a0aec0', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+      </div>
+      {open && (
+        <div style={{
+          background: '#fff', border: '1px solid #e2e8f0', borderTop: 'none',
+          borderRadius: '0 0 10px 10px', padding: '14px 16px', fontSize: 13, color: '#4a5568', lineHeight: 1.6,
+        }}>
+          <p style={{ margin: '0 0 10px' }}>
+            Vous avez des questions sur le modèle, sur comment telle ou telle formule marche,
+            besoin de comprendre un résultat en particulier ?
+          </p>
+          <ol style={{ margin: '0 0 12px', paddingLeft: 20 }}>
+            <li style={{ marginBottom: 6 }}>
+              <strong>Copiez ce prompt</strong> dans votre IA (ChatGPT, Claude…) pour lui donner le contexte :
+              <div style={{ marginTop: 6 }}>
+                <button onClick={handleCopy} style={{
+                  background: copied ? '#38a169' : '#2563eb', color: '#fff', border: 'none',
+                  borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s',
+                }}>
+                  {copied ? 'Copié !' : 'Copier le prompt système'}
+                </button>
+              </div>
+            </li>
+            <li>
+              <strong>Copiez le résultat de votre simulation</strong> via le bouton <em>« Copy to LLM »</em> en haut de la page, et collez-le à la suite.
+            </li>
+            <li>
+              Posez votre question — l'IA pourra expliquer chaque ligne, suggérer des optimisations ou comparer des scénarios.
+            </li>
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NumberInput({ label, value, onChange, min = 0, max = Infinity, step = 1, suffix = "" }) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
@@ -253,6 +335,7 @@ function getUrlParams() {
     rendementPer:  num('rendementPer',  num('rendement', null) ?? DEFAULTS.rendementPer),
     ageActuel: num('ageActuel', DEFAULTS.ageActuel),
     ageObjectif: num('ageObjectif', DEFAULTS.ageObjectif),
+    ageRetraite: num('ageRetraite', DEFAULTS.ageRetraite),
     joursLeverLePied: num('joursLeverLePied', DEFAULTS.joursLeverLePied),
     croquerCapital: bool('croquerCapital', DEFAULTS.croquerCapital),
     ageFin: num('ageFin', DEFAULTS.ageFin),
@@ -286,6 +369,7 @@ export default function App() {
   const [rendementPer,  setRendementPer]  = useState(INIT.rendementPer);
   const [ageActuel, setAgeActuel] = useState(INIT.ageActuel);
   const [ageObjectif, setAgeObjectif] = useState(INIT.ageObjectif);
+  const [ageRetraite, setAgeRetraite] = useState(INIT.ageRetraite);
   const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
   const [croquerCapital, setCroquerCapital] = useState(INIT.croquerCapital);
   const [ageFin, setAgeFin] = useState(INIT.ageFin);
@@ -321,16 +405,16 @@ export default function App() {
   const params = {
     ...DEFAULTS,
     tjm, jours, salaireBrut: salaireBrutEffectif, divNetsVoulus: divNetsEffectif,
-    frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif,
+    frais: fraisAvecPer, rendementCapi, rendementScpi, rendementPea, rendementPer, ageActuel, ageObjectif, ageRetraite,
     croquerCapital, ageFin, joursLeverLePied,
     ratioTreso, ratioCapi, salaireBrutCDI, inflation, partsFiscales, peaPerso, anneesAre,
     forme, capitalSocial
   };
 
-  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
+  const r = useMemo(() => computeAll(params), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, ageRetraite, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
 
   // Monte Carlo — 500 simulations avec rendements stochastiques
-  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
+  const mc = useMemo(() => computeMonteCarloProjection(params, r), [tjm, jours, salaireBrutEffectif, divNetsEffectif, perEffectif, ratioTreso, ratioCapi, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, ageRetraite, croquerCapital, ageFin, joursLeverLePied, salaireBrutCDI, partsFiscales, peaPerso, anneesAre, forme]);
 
   const age50Data = r.projection.find(p => p.age === ageObjectif) || r.projection[r.projection.length - 1];
 
@@ -348,6 +432,7 @@ export default function App() {
     set('rendementPer',  rendementPer,  DEFAULTS.rendementPer);
     set('ageActuel', ageActuel, DEFAULTS.ageActuel);
     set('ageObjectif', ageObjectif, DEFAULTS.ageObjectif);
+    set('ageRetraite', ageRetraite, DEFAULTS.ageRetraite);
     set('joursLeverLePied', joursLeverLePied, DEFAULTS.joursLeverLePied);
     set('croquerCapital', croquerCapital, DEFAULTS.croquerCapital);
     set('ageFin', ageFin, DEFAULTS.ageFin);
@@ -362,7 +447,7 @@ export default function App() {
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, joursLeverLePied, croquerCapital, ageFin, peaPerso, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales, forme]);
+  }, [tjm, jours, salaireBrut, divNetsVoulus, rendementCapi, rendementScpi, rendementPea, rendementPer, inflation, ageActuel, ageObjectif, ageRetraite, joursLeverLePied, croquerCapital, ageFin, peaPerso, per, salaireBrutCDI, ratioTreso, ratioCapi, partsFiscales, forme]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -452,6 +537,8 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 12px 40px' }}>
+        <AiHelperBanner />
+
         {/* ÉTAPE 1 : CHIFFRE D'AFFAIRES */}
         <Card title="1. Chiffre d'affaires" subtitle="Votre facturation = le point de départ" accent="#2563eb">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'end' }}>
@@ -696,6 +783,7 @@ export default function App() {
             <Slider label="Rendement PER" value={rendementPer} onChange={setRendementPer} min={0.02} max={0.08} step={0.005} format="pct" note="Net de frais assureur — PER en ligne" />
             <Slider label="Inflation anticipée" value={inflation} onChange={setInflation} min={0} max={0.05} step={0.005} format="pct" />
             <Slider label="Objectif lever le pied" value={ageObjectif} onChange={setAgeObjectif} min={42} max={60} step={1} format="num" suffix=" ans" />
+            <Slider label="Âge départ retraite" value={ageRetraite} onChange={setAgeRetraite} min={62} max={70} step={1} format="num" suffix=" ans" note="Taux plein — âge légal de départ" />
             <Slider label="Jours missions après objectif" value={joursLeverLePied} onChange={setJoursLeverLePied} min={0} max={150} step={5} format="num" suffix=" j/an" />
             <NumberInput label="Dernier salaire brut CDI (avant freelance)" value={salaireBrutCDI} onChange={setSalaireBrutCDI} min={0} max={200000} step={1000} suffix="€" />
           </div>
@@ -907,7 +995,7 @@ export default function App() {
             </table>
           </div>
           <div style={{ marginTop: 12, fontSize: 11, color: '#a0aec0' }}>
-            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire AGIRC-ARRCO : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois — estimé sur {ageActuel - 22} ans CDI (dernier salaire {fmt(salaireBrutCDI)} brut, progression +2,5%/an) + {ageObjectif - ageActuel} ans SASU à {fmt(params.salaireBrut)} brut, taux plein à 67 ans.
+            Retraite base : {fmt(r.retraiteBaseMois)}/mois + complémentaire AGIRC-ARRCO : {fmt(r.retraiteCompMois)}/mois = {fmt(r.retraiteTotaleMois)}/mois — estimé sur {ageActuel - 22} ans CDI (dernier salaire {fmt(salaireBrutCDI)} brut, progression +2,5%/an) + {ageObjectif - ageActuel} ans SASU à {fmt(params.salaireBrut)} brut, taux plein à {ageRetraite} ans.
             Sources : <a href="https://www.legislation.cnav.fr/Pages/bareme.aspx?Nom=salaire_annuel_moyen_702" target="_blank" rel="noopener" style={{ color: '#718096' }}>SAM (CNAV)</a> · <a href="https://www.agirc-arrco.fr/mes-services-particuliers/les-experts-retraite/valeur-du-point/" target="_blank" rel="noopener" style={{ color: '#718096' }}>Points AGIRC-ARRCO</a> · <a href="https://www.service-public.fr/particuliers/vosdroits/F21552" target="_blank" rel="noopener" style={{ color: '#718096' }}>Calcul pension base</a>
           </div>
         </Card>
