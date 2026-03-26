@@ -373,6 +373,7 @@ export default function App() {
   const [rendementPea,  setRendementPea]  = useState(INIT.rendementPea);
   const [rendementPer,  setRendementPer]  = useState(INIT.rendementPer);
   const [ageActuel, setAgeActuel] = useState(INIT.ageActuel);
+  const [ageActuelRaw, setAgeActuelRaw] = useState(String(INIT.ageActuel));
   const [ageObjectif, setAgeObjectif] = useState(INIT.ageObjectif);
   const [ageRetraite, setAgeRetraite] = useState(INIT.ageRetraite);
   const [joursLeverLePied, setJoursLeverLePied] = useState(INIT.joursLeverLePied);
@@ -530,8 +531,18 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#4a5568' }}>Âge</span>
-            <input type="number" min={20} max={65} value={ageActuel}
-              onChange={e => setAgeActuel(Math.max(20, Math.min(65, parseInt(e.target.value) || 20)))}
+            <input type="number" min={20} max={65} value={ageActuelRaw}
+              onChange={e => {
+                setAgeActuelRaw(e.target.value);
+                const v = parseInt(e.target.value);
+                if (!isNaN(v)) setAgeActuel(Math.max(20, Math.min(65, v)));
+              }}
+              onBlur={() => {
+                const v = parseInt(ageActuelRaw);
+                const clamped = isNaN(v) ? DEFAULTS.ageActuel : Math.max(20, Math.min(65, v));
+                setAgeActuel(clamped);
+                setAgeActuelRaw(String(clamped));
+              }}
               className="no-spin"
               style={{ width: 42, padding: '4px 6px', borderRadius: 6, border: '1px solid #cbd5e0',
                 background: '#fff', color: '#1a365d', fontSize: 13, fontWeight: 700,
